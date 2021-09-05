@@ -1455,10 +1455,6 @@ namespace exp {
     }
   }
 
-  //parse(exp: string, options ?: ParseOptions): IValue {
-  //  return new Parser(exp, options).parse();
-  //}
-
   export function parse(exp: Expression, options?: ParseOptions): IValue {
     if (exp && typeof exp == "string")
       exp = new Parser(exp, options).parse()
@@ -1527,16 +1523,6 @@ namespace exp {
     Object.assign(formulas, values);
   }
 
-  //export function defaultFormulas(this: CalcOptions, name: string, values: any[]) {
-  //  var formula = formulas[name];
-  //  if (!formula)
-  //    throw { msg: "not_found", name };
-  //  return formula.calc.apply(this, values);
-  //}
-  //export function defaultUncaseFormula(this: CalcOptions, name: string, values: any[]) {
-  //  return defaultFormulas.call(this, name.toLowerCase(), values);
-  //}
-
   export enum QueryAlgorithm {
     word,
     like
@@ -1587,19 +1573,19 @@ namespace exp {
     return null;
   }
 
-  function compareString(string1, string2) {
-    string1 = string1.replace(/\s+/g, '');
-    string2 = string2.replace(/\s+/g, '');
+  function compareString(str1:string, str2:string) {
+    str1 = str1.replace(/\s+/g, '');
+    str2 = str2.replace(/\s+/g, '');
 
-    if (!string1.length && !string2.length) return 1;                   // if both are empty strings
-    if (!string1.length || !string2.length) return 0;                   // if only one is empty string
-    if (string1 === string2) return 1;       							 // identical
-    if (string1.length === 1 && string2.length === 1) return 0;         // both are 1-letter strings
-    if (string1.length < 2 || string2.length < 2) return 0;			 // if either is a 1-letter string
+    if (!str1.length && !str2.length) return 1;                   // if both are empty strings
+    if (!str1.length || !str2.length) return 0;                   // if only one is empty string
+    if (str1 === str2) return 1;       							 // identical
+    if (str1.length === 1 && str2.length === 1) return 0;         // both are 1-letter strings
+    if (str1.length < 2 || str2.length < 2) return 0;			 // if either is a 1-letter string
 
     let firstBigrams = new Map();
-    for (let i = 0; i < string1.length - 1; i++) {
-      const bigram = string1.substr(i, 2);
+    for (let i = 0; i < str1.length - 1; i++) {
+      const bigram = str1.substr(i, 2);
       const count = firstBigrams.has(bigram)
         ? firstBigrams.get(bigram) + 1
         : 1;
@@ -1608,8 +1594,8 @@ namespace exp {
     };
 
     let intersectionSize = 0;
-    for (let i = 0; i < string2.length - 1; i++) {
-      const bigram = string2.substr(i, 2);
+    for (let i = 0; i < str2.length - 1; i++) {
+      const bigram = str2.substr(i, 2);
       const count = firstBigrams.has(bigram)
         ? firstBigrams.get(bigram)
         : 0;
@@ -1620,7 +1606,7 @@ namespace exp {
       }
     }
 
-    return (2.0 * intersectionSize) / (string1.length + string2.length - 2);
+    return (2.0 * intersectionSize) / (str1.length + str2.length - 2);
   }
 }
 
