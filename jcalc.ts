@@ -578,11 +578,11 @@ export class CallVal implements IScopeValue {
       if (v !== void 0)
         return v;
     }
-    let formula = (!f && opts.funcs) && opts.funcs[name] || (name in formulas ? formulas[name].calc : null);
+    let fx = (!f && opts.funcs) && opts.funcs[name] || (name in formulas ? formulas[name].calc : null);
 
-    if (!formula)
+    if (!fx)
       throw { msg: "not_found", name };
-    return formula.apply(opts, args);
+    return fx.apply(opts, args);
   }
 
   valid() { return true; }
@@ -680,6 +680,26 @@ export class VarVal implements IValValue {
     yield this;
   }
 }
+export class ConstVal implements IValValue {
+  get op(): 'c' { return 'c'; }
+  render?(this: this): unknown;
+  constructor(public value: string) { }
+
+  valid() { return true; }
+  calc(opts: CalcOptions) {
+    return consts[this.value];
+  }
+  toString() { return this.value; }
+  toJSON() { return this.value; }
+  vars(vars: string[] = []) { return vars; }
+  translate(dir: TranslateDir) { return this; }
+
+  analize(_: Check) { }
+  *[Symbol.iterator]() {
+    yield this;
+  }
+}
+export const consts: Dic<unknown> = { null: null, false: false, true: true };
 export class TextValue implements IValValue {
   get op(): 't' { return 't'; }
   render?(this: this): unknown;
@@ -935,12 +955,12 @@ class Parser {
 
     if (old instanceof OpVal) {
 
-      //ex: 2+3*4, 2*3^4
+      //assign: 2+3*4, 2*3^4
       if (_new.level > old.level) {
         _new.a = stored;
         s.push(_new);//new OpValue(_new, stored)
       }
-      //ex: 2*3+4,3^4+1, 2*3/4
+      //assign: 2*3+4,3^4+1, 2*3/4
       else {
         old.b = stored;
 
@@ -1020,7 +1040,7 @@ class Parser {
           this.setMode(PM.object);
           obj = null;
         } else /*se for variavel*/ {
-          this.setStored(new VarVal(storedText));
+          this.setStored(storedText in consts? new ConstVal(storedText): new VarVal(storedText));
           this.setMode(PM.variable);
         }
       } while (obj);
