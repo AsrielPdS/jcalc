@@ -670,7 +670,7 @@ export class VarVal implements IValValue {
     return this.value;
   }
   vars(vars: string[] = []) {
-    vars.push(this.value);
+    vars.includes(this.value) || vars.push(this.value);
     return vars;
   }
   translate(dir: TranslateDir) { return this; }
@@ -752,7 +752,7 @@ export class ObjectVal implements IValue {
     return this.levels.join('.');
   }
   vars(vars: string[] = []) {
-    vars.push(this.levels[0]);
+    vars.includes(this.levels[0]) || vars.push(this.levels[0]);
     return vars;
   }
   translate(dir: TranslateDir) { return this; }
@@ -1040,7 +1040,7 @@ class Parser {
           this.setMode(PM.object);
           obj = null;
         } else /*se for variavel*/ {
-          this.setStored(storedText in consts? new ConstVal(storedText): new VarVal(storedText));
+          this.setStored(storedText in consts ? new ConstVal(storedText) : new VarVal(storedText));
           this.setMode(PM.variable);
         }
       } while (obj);
