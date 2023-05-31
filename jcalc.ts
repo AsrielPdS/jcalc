@@ -8,6 +8,7 @@ export const enum Error {
   /**call when a variable was not found */
   varNotFound = 10,
 }
+
 export interface IValue extends Iterable<IValue> {
   readonly op: string;
   valid(): boolean;
