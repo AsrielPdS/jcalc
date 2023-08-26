@@ -1,13 +1,22 @@
 {
   "name": "jcalc",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "",
   "main": "jcalc.js",
   "type":"module",
+  "keywords": [
+    "math",
+    "expression"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "min": "node -e \"import('./tasks.js').then(_=>_.minify())\""
   },
-  "keywords": [],
-  "author": "Asriel Pires",
+  "author": {
+    "name": "Asriel Pires",
+    "email": "bebether@gmail.com"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.36.4"
+  },
   "license": "ISC"
 }

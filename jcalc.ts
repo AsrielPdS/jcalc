@@ -1,16 +1,16 @@
-
 interface Dic<T = any> { [key: string]: T; }
 type Check = (old: Val) => Val | void;
 
 const isF = (v: unknown): v is Function => typeof v == "function";
+const isS = (v: unknown): v is string => typeof v == "string";
 
-export const enum Error {
+const enum Error {
   /**call when a variable was not found */
   varNotFound = 10,
 }
 
-export interface IValue extends Iterable<IValue> {
-  readonly op: string;
+export interface IValue {// extends Iterable<IValue>
+  // readonly op: string;
   valid(): boolean;
   calc(opts: CalcOptions): any;
   toString(): string;
@@ -19,9 +19,9 @@ export interface IValue extends Iterable<IValue> {
   render?(this: this): unknown;
   vars(vars?: string[]): string[];
   translate(dir: TranslateDir): IValue;
-  analize?(check: Check): void;
+  do?(check: Check): void;
 }
-export class ParseError {
+class ParseError {
   start: number;
   length?: number;
   type: ParseErrorType;
@@ -33,7 +33,7 @@ interface IScopeValue extends IValue {
   push(val: Val): void;
 }
 export abstract class OpVal implements IScopeValue {
-  get op(): 'op' { return 'op'; }
+  // get op(): 'op' { return 'op'; }
   a: Val;
   b: Val;
   readonly abstract level: number;
@@ -63,21 +63,21 @@ export abstract class OpVal implements IScopeValue {
 
     return t;
   }
-  analize(check: Check) {
+  do(check: Check) {
     let t = check(this.a);
     if (t)
       this.a = t;
-    else this.a.analize(check);
+    else this.a.do(check);
 
     if (t = check(this.b))
       this.b = t;
-    else this.b.analize(check);
+    else this.b.do(check);
   }
-  *[Symbol.iterator]() {
-    yield this;
-    yield* this.a;
-    yield* this.b;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   yield* this.a;
+  //   yield* this.b;
+  // }
   static op: string;
 }
 export class SumOp extends OpVal {
@@ -88,14 +88,12 @@ export class SumOp extends OpVal {
       a = this.a.calc(opts) as number | string,
       b = this.b.calc(opts) as number | string;
     if (opts.try) {
-      if (!a)
-        a = 0;
-      if (!b)
-        b = 0;
+      if (!a) a = 0;
+      if (!b) b = 0;
     }
-    if (typeof a == 'string')
+    if (isS(a))
       a = parseFloat(a);
-    if (typeof b == 'string')
+    if (isS(b))
       b = parseFloat(b);
 
     return a + b;
@@ -306,6 +304,7 @@ export class NulledOp extends OpVal {
     return this.a + '??' + this.b;
   }
 }
+// export type OpVal = | SumOp | TimeOp | SubOp | DivOp | EqualOp | AndOp | ConcatOp | LesEqualOp | DifOp | LessOp | OrOp | GreaterEqualOp | GreaterOp | PowOp | NulledOp;
 export class TernaryOp extends OpVal {
   c: Val;
   get level() { return 1; }
@@ -333,16 +332,16 @@ export class TernaryOp extends OpVal {
     this.c.vars(vars);
     return vars;
   }
-    /*override*/  *[Symbol.iterator]() {
-    yield this;
-    yield* this.a;
-    yield* this.b;
-    yield* this.c;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   yield* this.a;
+  //   yield* this.b;
+  //   yield* this.c;
+  // }
 }
 
 export class DicVal implements IValue {
-  get op(): 'dic' { return 'dic'; }
+  //get op(): 'dic' { return 'dic'; }
   render?(this: this): unknown;
 
   constructor(public data: Dic<Val>) { }
@@ -371,21 +370,21 @@ export class DicVal implements IValue {
     return '';
   }
 
-  analize(check: Check) {
+  do(check: Check) {
     for (let key in this.data) {
       let
         t = this.data[key],
         u = check(t);
       if (u)
         this.data[key] = u;
-      else t.analize(check);
+      else t.do(check);
     }
   }
-  *[Symbol.iterator]() {
-    yield this;
-    for (let k in this.data)
-      yield* this.data[k];
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   for (let k in this.data)
+  //     yield* this.data[k];
+  // }
   vars(vars?: string[]): string[] {
     for (let key in this.data)
       this.data[key].vars(vars);
@@ -393,14 +392,14 @@ export class DicVal implements IValue {
     return vars;
   }
 }
-export const enum Signals {
+const enum Signals {
   plus = '+',
   Minus = '-',
   Not = '!'
 }
 
 export class SignalVal implements IScopeValue {
-  get op(): 'sig' { return 'sig'; }
+  //get op(): 'sig' { return 'sig'; }
   render?(this: this): unknown;
   //op: Operand = "_";
   //signal: '-' = '-';
@@ -452,19 +451,19 @@ export class SignalVal implements IScopeValue {
     t.value = this.value.translate(dir)
     return t;
   }
-  analize(check: Check) {
+  do(check: Check) {
     let t = check(this.value);
     if (t)
       this.value = t;
   }
-  *[Symbol.iterator]() {
-    yield this;
-    yield* this.value;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   yield* this.value;
+  // }
 }
 
 export class GroupVal implements IScopeValue {
-  get op(): 'g' { return 'g'; }
+  //get op(): 'g' { return 'g'; }
   render?(this: this): unknown;
   public value?: Val;
 
@@ -487,7 +486,7 @@ export class GroupVal implements IScopeValue {
   toJSON() {
     return '(' + this.value + ')';
   }
-  analize(check: Check) {
+  do(check: Check) {
     let t = check(this.value);
     if (t)
       this.value = t;
@@ -501,13 +500,13 @@ export class GroupVal implements IScopeValue {
     t.value = this.value.translate(dir)
     return t;
   }
-  *[Symbol.iterator]() {
-    yield this;
-    yield* this.value;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   yield* this.value;
+  // }
 }
 export class FnVal implements IScopeValue {
-  get op(): 'fn' { return 'fn'; }
+  //get op(): 'fn' { return 'fn'; }
 
   render?(this: this): unknown;
 
@@ -516,7 +515,7 @@ export class FnVal implements IScopeValue {
   constructor(public args: string[], public body: Val) { }
   valid() { return !!this.body; }
   push(val: IValue): void {
-    if (val instanceof VarVal)
+    if (val instanceof Var)
       this.args.push(val.value);
     else throw null;
   }
@@ -524,7 +523,7 @@ export class FnVal implements IScopeValue {
     var t = this.args;
     return (...args: unknown[]) => {
       return this.body.calc({
-        funcs: opts.funcs,
+        fn: opts.fn,
         object: opts.object,
         optional: opts.optional,
         try: opts.try,
@@ -554,32 +553,40 @@ export class FnVal implements IScopeValue {
     return new FnVal(this.args, this.body.translate(dir));
   }
 
-  analize(check: Check) {
+  do(check: Check) {
     let t = check(this.body);
     if (t)
       this.body = t;
   }
-  *[Symbol.iterator]() {
-    yield this;
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
+}
+function varcase(opts: GlobalOptions, fn: string) {
+  switch (opts.uncase) {
+    case "u":
+      return fn.toUpperCase();
+    case "l":
+      return fn.toLowerCase();
+    default:
+      return fn;
   }
 }
 export class CallVal implements IScopeValue {
-  get op(): 'call' { return 'call'; }
+  //get op(): 'call' { return 'call'; }
   render?(this: this): unknown;
   constructor(public func: string, public args: Val[] = []) { }
 
   calc(opts: CalcOptions) {
-    let
-      args = this.args.map(a => a.calc(opts)),
-      name = opts.uncase ? this.func.toLowerCase() : this.func,
-      f = isF(opts.funcs);
+    let args = this.args.map(a => a.calc(opts));
+    let name = varcase(opts, this.func), f = isF(opts.fn);
 
     if (f) {
-      let v = (opts.funcs as Function)(name, args);
+      let v = (opts.fn as Function)(name, args);
       if (v !== void 0)
         return v;
     }
-    let fx = (!f && opts.funcs) && opts.funcs[name] || (name in formulas ? formulas[name].calc : null);
+    let fx = (!f && opts.fn) && opts.fn[name] || (name in formulas ? formulas[name].calc : null);
 
     if (!fx)
       throw { msg: "not_found", name };
@@ -606,65 +613,62 @@ export class CallVal implements IScopeValue {
     t.args = this.args.map(a => a.translate(dir));
     return t;
   }
-  analize(check: Check) {
+  do(check: Check) {
     for (let i = 0, a = this.args; i < a.length; i++) {
       let
         t = a[i],
         u = check(t);
       if (u)
         a[i] = u;
-      else t.analize(check);
+      else t.do(check);
     }
   }
-  *[Symbol.iterator]() {
-    yield this;
-    for (let t of this.args)
-      yield* t;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  //   for (let t of this.args)
+  //     yield* t;
+  // }
 }
 
 type AcceptScopeVal = GroupVal | FnVal | CallVal | OpVal | SignalVal;
 interface IValValue extends IValue {
   value: unknown;
 }
-export class NumbVal implements IValValue {
-  get op(): 'n' { return 'n'; }
+export class Numb implements IValValue {
+  //get op(): 'n' { return 'n'; }
 
   render?(this: this): unknown;
-  public value: string;
-
-  constructor(value: string) {
-    this.value = value;
-  }
+  constructor(public value: number) { }
   async calcAsync<T = any>(): Promise<T> {
     return this.value as any;
   }
 
   valid() { return true; }
   calc<T = any>(): T {
-    return +this.value as any;
+    return this.value as any;
   }
   toString() { return this.toJSON(); }
   toJSON() {
-    return +this.value + '';
+    return this.value + '';
   }
   vars(vars: string[] = []) {
     return vars;
   }
-  analize(_: Check) { }
+  do(_: Check) { }
   translate(dir: TranslateDir) { return this; }
-  *[Symbol.iterator]() {
-    yield this;
-  }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
 }
-export class VarVal implements IValValue {
-  get op(): 'v' { return 'v'; }
+export class Var implements IValValue {
+  //get op(): 'v' { return 'v'; }
   render?(this: this): unknown;
   constructor(public value: string) { }
 
   valid() { return true; }
   calc(opts: CalcOptions) {
-    return isF(opts.vars) ? opts.vars(this.value) : opts.vars[this.value];
+    let v = varcase(opts, this.value)
+    return isF(opts.vars) ? opts.vars(v) : opts.vars[v];
   }
   toString() { return this.toJSON(); }
   toJSON() {
@@ -676,40 +680,37 @@ export class VarVal implements IValValue {
   }
   translate(dir: TranslateDir) { return this; }
 
-  analize(_: Check) { }
-  *[Symbol.iterator]() {
-    yield this;
-  }
+  do(_: Check) { }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
 }
-export class ConstVal implements IValValue {
-  get op(): 'c' { return 'c'; }
+export class Const implements IValValue {
+  //get op(): 'c' { return 'c'; }
   render?(this: this): unknown;
-  constructor(public value: string) { }
+  constructor(public value: any, public key: string) { }
 
   valid() { return true; }
-  calc(opts: CalcOptions) {
-    return consts[this.value];
-  }
-  toString() { return this.value; }
-  toJSON() { return this.value; }
+  calc() { return this.value; }
+  toString() { return this.key; }
+  toJSON() { return this.key; }
   vars(vars: string[] = []) { return vars; }
   translate(dir: TranslateDir) { return this; }
 
-  analize(_: Check) { }
-  *[Symbol.iterator]() {
-    yield this;
-  }
+  do(_: Check) { }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
 }
-export const consts: Dic<unknown> = { null: null, false: false, true: true };
-export class TextValue implements IValValue {
-  get op(): 't' { return 't'; }
+export class Text implements IValValue {
+  //get op(): 't' { return 't'; }
   render?(this: this): unknown;
   constructor(public value: string, public charCode?: number) {
   }
-  static create(text: string) {
-    return new TextValue(text, '"'.charCodeAt(0));
-  }
-  get char() { return String.fromCharCode(this.charCode); }
+  // static create(text: string) {
+  //   return new Text(text, '"'.charCodeAt(0));
+  // }
+  // get char() { return String.fromCharCode(this.charCode); }
   valid() { return true; }
   calc<T = any>(): T {
     return this.value as any;
@@ -724,13 +725,14 @@ export class TextValue implements IValValue {
   vars(vars: string[] = []) { return vars; }
   translate(dir: TranslateDir) { return this; }
 
-  analize(_: Check) { }
-  *[Symbol.iterator]() {
-    yield this;
-  }
+  do(_: Check) { }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
 }
+
 export class ObjectVal implements IValue {
-  get op(): 'o' { return 'o'; }
+  //get op(): 'o' { return 'o'; }
   render?(this: this): unknown;
   constructor(public levels: string[]) { }
 
@@ -758,46 +760,95 @@ export class ObjectVal implements IValue {
   }
   translate(dir: TranslateDir) { return this; }
 
-  analize(_: Check) { }
-  *[Symbol.iterator]() {
-    yield this;
+  do(_: Check) { }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
+}
+function nToLetter(num: number) {
+  let letters = ''
+  while (num >= 0) {
+    letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[num % 26] + letters
+    num = Math.floor(num / 26) - 1
   }
+  return letters
+}
+let letterToN = (v: string) => v.split('').reduce((r, a) => r * 26 + parseInt(a, 36) - 9, 0);
+export class RangeVal implements IValue {
+  //get op(): 'r' { return 'r'; }
+  render?(this: this): unknown;
+  constructor(public h0: number, public v0: number, public h1: number, public v1: number,) {
+
+  }
+  valid() { return true; }
+  calc(opts: CalcOptions) {
+    let result = [];
+    if (isF(opts.vars)) {
+      throw "not implemented";
+    } else {
+      let vars = opts.vars;
+      let { v0, v1, h0, h1 } = this;
+      if (v1 < v0) [v1, v0] = [v0, v1];
+      if (h1 < h0) [h1, h0] = [h0, h1];
+      for (let h = v0; h <= v1; h++)
+        for (let v = h0; v <= h1; v++) {
+          let t = nToLetter(h) + v;
+          if (t in vars) result.push(vars[t]);
+        }
+    }
+    return result;
+  }
+  toString() { return this.toJSON(); }
+  toJSON() {
+    let { v0, v1, h0, h1 } = this;
+    return `${nToLetter(h0)}${v0}:${nToLetter(h1)}${v1}`;
+  }
+  vars(): any {
+    throw null;
+  }
+  translate(dir: TranslateDir) { return this; }
+
+  do(_: Check) { }
+  // *[Symbol.iterator]() {
+  //   yield this;
+  // }
 }
 
-//export namespace _ {
-//  export function v(value: string) {
-//    return new VarVal(value);
+
+//namespace _ {
+//  function v(value: string) {
+//    return new Var(value);
 //  }
-//  export function t(value: string) {
-//    return new TextValue(value);
+//  function t(value: string) {
+//    return new Text(value);
 //  }
-//  export function ob(...args: string[]) {
+//  function ob(...args: string[]) {
 //    return new ObjectVal(args);
 //  }
-//  export function call(fn: string, ...args: Val[]) {
+//  function call(fn: string, ...args: Val[]) {
 //    return new CallVal(fn, args);
 //  }
 //}
-export type AllVal = FnVal | DicVal | OpVal | GroupVal | SignalVal | SignalVal | TernaryOp | CallVal | NumbVal | VarVal | ObjectVal | TextValue;
-export type Val = IValue; //
+type AllVal = FnVal | DicVal | OpVal | GroupVal | SignalVal | SignalVal | TernaryOp | CallVal | Numb | Var | ObjectVal | Text;
+type Val = IValue; //
 
 type TranslateDir = 1 | -1;
 interface Settings {
   translate?(funcName: string, signal: TranslateDir): string;
 }
-export const $: Settings = {}
-export function analize(val: Val, check: Check) {
+const $: Settings = {}
+export function analyze(val: Val, check: Check) {
   let t = check(val);
   if (t)
     return t;
-  val.analize(check);
+  val.do(check);
   return val;
 }
-export function clone(val: Val) {
+function clone(val: Val) {
   return new Parser(val.toString()).parse();
 }
 /** */
-export interface DataType {
+interface DataType {
   boolean: boolean,
   text: string,
   number: number,
@@ -815,13 +866,12 @@ export interface DataType {
   any: any;
 }
 export type Expression = IValue | string;
-export type DataTypes = keyof DataType;
+type DataTypes = keyof DataType;
 
 
-export const enum ParseErrorType {
+const enum ParseErrorType {
 
 }
-
 
 const enum PM {
   none = 0,
@@ -875,6 +925,7 @@ const enum PM {
   dic = value | 8,
   variable = value | 16,
   object = variable | 32,
+  range = variable | 64,
 
 
   signal = valueEnd * 2,
@@ -887,7 +938,7 @@ function has<T extends number>(value: T, check: T): boolean {
   return (value & check) === check;
 }
 
-export interface ParseOptions {
+interface ParseOptions {
   warn?: boolean;
   from?: number;
   /**if true when scope stop in middle of expression don't throw error */
@@ -978,79 +1029,8 @@ class Parser {
     //  s.push(_new);
     //}
   }
-  parseString(i: number, exp: string, char: number) {
-    let
-      temp1 = "",
-      letter = exp.charCodeAt(i + 1);
-    //check se a letra não é " se for checa a proxima letra 
-    while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
-      //se chegar no final da expressão sem terminar a string
-      if (Number.isNaN(letter))
-        throw "error";
-      temp1 += exp[i + 1];
-      letter = exp.charCodeAt(++i + 1);
-    }
-
-    this.setMode(PM.string);
-
-    this.setStored(new TextValue(temp1, char));
-
-    return i;
-  }
-
-  parseVal(char: number, exp: string, i: number) {
-    let storedText = exp[i], l = exp.length;
-    //se for numero ou ponto
-    if ((char > 47 && char < 58) || char == 46) {
-      char = exp.charCodeAt(i + 1);
-      while (((char > 47 && char < 58) || char == 46) && i < l) {
-        storedText += exp[i + 1];
-        char = exp.charCodeAt(++i + 1);
-      }
-      this.setStored(new NumbVal(storedText));
-      this.setMode(PM.number);
-      //se for letra ou underscore
-      //letra minuscula>>>>>>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>>underscore>>>>>>at>>>>>>>>>>>>dois pontos
-    } else if ((char > 96 && char < 123) || (char > 64 && char < 91) || char === 95 || char === 64/* || letter == 58*/) {
-      let obj: string[];
-      do {
-        char = exp.charCodeAt(i + 1);
-        //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
-        while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
-          storedText += exp[i + 1];
-          char = exp.charCodeAt(++i + 1);
-        }
-
-        //se for função
-        if (char == 40) {
-
-          this.setMode(PM.call);
-          this.scope.push(new CallVal(storedText));
-          i++;
-
-        } else /*se for object*/if (char === 46) {
-          obj ?
-            obj.push(storedText) :
-            (obj = [storedText]);
-          //um passo para frente para passar o ponto
-          //um passo para passar o primeiro caracter
-          storedText = exp[i += 2];
-        } else if (obj) {
-          obj.push(storedText);
-          this.setStored(new ObjectVal(obj));
-          this.setMode(PM.object);
-          obj = null;
-        } else /*se for variavel*/ {
-          this.setStored(storedText in consts ? new ConstVal(storedText) : new VarVal(storedText));
-          this.setMode(PM.variable);
-        }
-      } while (obj);
-    } else throw `invalid expression character found '${exp[i]}'`;
-    return i;
-  }
-  parseDic() {
-
-  }
+  // parseString(i: number, exp: string, char: number) 
+  // parseVal(char: number, exp: string, i: number) 
   isCall(exp: string, i: number) {
     for (let l = exp.length - 3; i < l; i++) {
       if (exp[i] == '(')
@@ -1081,12 +1061,15 @@ class Parser {
     }
     return r;
   }
-  error(error: string, index?: number) {
+  error(error?: string, index?: number) {
     throw {
       expression: this.expression,
       index: index,
       error: error
     };
+  }
+  err(i: number) {
+    return { index: i, exp: this.expression }
   }
   jumpSpace(exp: string, i: number) {
     while (exp[i] == ' ')
@@ -1095,13 +1078,13 @@ class Parser {
   }
   parse(): Val {
     let scope = this.scope;
+
     //let
     //  this.stored = this.this.stored,
     //  scope = this.scope;
 
     for (let i = this.options.from || 0, exp = this.expression; i < exp.length; i++) {
       let char = exp.charCodeAt(i);
-
       switch (char) {
         // space
         case 32:
@@ -1414,10 +1397,28 @@ class Parser {
         // "
         case 34:
         // '
-        case 39:
-          i = this.parseString(i, exp, char);
-          break;
-
+        case 39: {
+          let temp1 = "";
+          //para garantir que não é uma string vazia
+          if (exp.charCodeAt(i + 1) != char) {
+            let regex = char == 34 ? /[^"]"/ : /[^']'/;
+            regex.lastIndex = i + 1;
+            let t = regex.exec(exp);
+            if (!t) throw 1;
+            temp1 = exp.slice(i + 1, i = t.index);
+          }
+          this.setMode(PM.string);
+          this.setStored(new Text(temp1, char));
+          // letter = exp.charCodeAt(i + 1);
+          // //check se a letra não é " se for checa a proxima letra 
+          // while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
+          //   //se chegar no final da expressão sem terminar a string
+          //   if (Number.isNaN(letter))
+          //     throw "error";
+          //   temp1 += exp[i + 1];
+          //   letter = exp.charCodeAt(++i + 1);
+          // }
+        } break;
 
         // ^
         case 94:
@@ -1425,18 +1426,6 @@ class Parser {
           this.setMode(PM.power);
 
           break;
-        //// ; isso esta amais
-        //case 59: {
-        //  if (!(scope[scope.length - 2] instanceof FnVal))
-        //    throw "invalid expression";
-
-        //  this.setMode(PM.end);
-        //  let temp3 = scope.pop();
-        //  temp3.push(this.getStored());
-
-
-        //  this.setStored(temp3);
-        //} break;
         // [
         case 91:
           break;
@@ -1446,7 +1435,89 @@ class Parser {
           break;
 
         default:
-          i = this.parseVal(char, exp, i);
+          // i = this.parseVal(char, exp, i);
+          {
+            //se for numero ou ponto
+            if ((char > 47 && char < 58) || char == 46) {
+              let storedText = exp[i], l = exp.length;
+              char = exp.charCodeAt(i + 1);
+              while (((char > 47 && char < 58) || char == 46) && i < l) {
+                storedText += exp[i + 1];
+                char = exp.charCodeAt(++i + 1);
+              }
+              let t = +storedText;
+              if (isNaN(t)) throw this.err(i);
+              this.setStored(new Numb(t));
+              this.setMode(PM.number);
+              //se for letra ou underscore
+            } else {
+              let regex = /[a-zA-Z_]\w*/g; regex.lastIndex = i;
+              let t0 = regex.exec(exp);
+              if (!t0 || t0.index != i) throw this.err(i);
+              let t1 = t0[0];
+
+              switch (exp[i += t1.length]) {
+                case "(":
+                  this.setMode(PM.call);
+                  this.scope.push(new CallVal(t1));
+                  i++;
+                  break;
+                case ".": {
+                  let obj = [t1];
+                  do {
+                    t0 = regex.exec(exp)
+                    if (!t0 || t0.index != i + 1) throw this.err(i);
+                    obj.push(t0[0]);
+                    if (exp[i += t1.length] != ".") break;
+                  } while (true)
+                  this.setStored(new ObjectVal(obj));
+                  this.setMode(PM.object);
+                } break;
+                case ":": {
+                  let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/;
+                  regex.lastIndex = i - t0.length;
+                  t0 = regex.exec(exp);
+                  if (!t0 || t0.index != i + 1) throw this.err(i);
+
+                  this.setStored(new RangeVal(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
+                  this.setMode(PM.range);
+                } break;
+                default: {
+                  let t2 = varcase(options, t1);
+                  this.setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
+                  this.setMode(PM.variable);
+                }
+              }
+              // //   letra minuscula              letra maiuscula            underscore
+              // //  (char > 96 && char < 123) || (char > 64 && char < 91) || char === 95
+              // if () {
+              //   let obj: string[];
+              //   do {
+              //     char = exp.charCodeAt(i + 1);
+              //     //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
+              //     while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
+              //       storedText += exp[i + 1];
+              //       char = exp.charCodeAt(++i + 1);
+              //     }
+              //     //se for função
+              //     if (char == 40) {
+              //     } else /*se for object*/if (char === 46) {
+              //       obj ?
+              //         obj.push(storedText) :
+              //         (obj = [storedText]);
+              //       //um passo para frente para passar o ponto
+              //       //um passo para passar o primeiro caracter
+              //       storedText = exp[i += 2];
+              //     } else if (obj) {
+              //       obj = null;
+              //     } else /*se for variavel*/ {
+
+              //     }
+              //   } while (obj);
+              // } else throw `invalid expression character found '${exp[i]}'`;
+            }
+            // return i;
+          }
       }
     }
 
@@ -1469,30 +1540,32 @@ class Parser {
     return scope[0] || this.stored;
   }
 }
-
 export function parse(exp: Expression, options?: ParseOptions): IValue {
-  if (exp && typeof exp == "string")
+  if (exp && isS(exp))
     exp = new Parser(exp, options).parse()
 
   return <IValue>exp;
 }
 
-export interface CalcOptions {
-  vars?: Dic<unknown> | ((name: string, obj?: boolean) => unknown)
-  funcs?: Dic<(this: this, ...params: unknown[]) => unknown> | ((name: string, params: unknown[]) => any);
+export interface GlobalOptions {
   object?: boolean;
   try?: boolean;
   optional?: boolean;
-  uncase?: boolean;
+  uncase?: "u" | "l";
 }
-export interface DicCalcOptions extends CalcOptions {
+interface CalcOptions extends GlobalOptions {
+  vars?: Dic<unknown> | ((name: string, obj?: boolean) => unknown)
+  fn?: Dic<(this: this, ...params: unknown[]) => unknown> | ((name: string, params: unknown[]) => any);
+}
+interface DicCalcOptions extends CalcOptions {
   vars?: Dic<unknown>;
 }
+export const consts: Dic<unknown> = { null: null, false: false, true: true };
+export const options: GlobalOptions = {}
 
-export default function calc(exp: Expression, options: CalcOptions) {
+export default function calc(exp: Expression, options: CalcOptions = {}) {
   if (!exp) return null;
-  if (typeof exp === 'string') {
-
+  if (isS(exp)) {
     if (options.optional)
       if (exp[0] == '=')
         exp = exp.substring(1);
@@ -1503,20 +1576,20 @@ export default function calc(exp: Expression, options: CalcOptions) {
   return exp.calc(options);//[, ]//;
 }
 
-export function calcAll(expressions: Dic<Expression>, options: CalcOptions): Dic<unknown> {
+function calcAll(expressions: Dic<Expression>, options: CalcOptions): Dic<unknown> {
   var result: Dic<unknown> = {};
   for (let key in expressions)
     result[key] = calc(expressions[key], options);
   return result;
 }
 
-export interface Parameter {
+interface Parameter {
   range?: boolean;
   type: DataTypes | DataTypes[];
   name: string;
 }
 type Calc = (this: CalcOptions, ...args: unknown[]) => unknown;
-export interface Formula {
+interface Formula {
   type?: DataTypes;
   /**se não tiver um grupo vai para o miscelenius(variado) */
   group?: string;

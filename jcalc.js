@@ -1,11 +1,12 @@
 const isF = (v) => typeof v == "function";
-export class ParseError {
+const isS = (v) => typeof v == "string";
+class ParseError {
     start;
     length;
     type;
 }
 export class OpVal {
-    get op() { return 'op'; }
+    // get op(): 'op' { return 'op'; }
     a;
     b;
     valid() { return !!this.b; }
@@ -26,22 +27,22 @@ export class OpVal {
         t.b = this.b.translate(dir);
         return t;
     }
-    analize(check) {
+    do(check) {
         let t = check(this.a);
         if (t)
             this.a = t;
         else
-            this.a.analize(check);
+            this.a.do(check);
         if (t = check(this.b))
             this.b = t;
         else
-            this.b.analize(check);
+            this.b.do(check);
     }
-    *[Symbol.iterator]() {
-        yield this;
-        yield* this.a;
-        yield* this.b;
-    }
+    // *[Symbol.iterator]() {
+    //   yield this;
+    //   yield* this.a;
+    //   yield* this.b;
+    // }
     static op;
 }
 export class SumOp extends OpVal {
@@ -54,9 +55,9 @@ export class SumOp extends OpVal {
             if (!b)
                 b = 0;
         }
-        if (typeof a == 'string')
+        if (isS(a))
             a = parseFloat(a);
-        if (typeof b == 'string')
+        if (isS(b))
             b = parseFloat(b);
         return a + b;
     }
@@ -238,6 +239,7 @@ export class NulledOp extends OpVal {
         return this.a + '??' + this.b;
     }
 }
+// export type OpVal = | SumOp | TimeOp | SubOp | DivOp | EqualOp | AndOp | ConcatOp | LesEqualOp | DifOp | LessOp | OrOp | GreaterEqualOp | GreaterOp | PowOp | NulledOp;
 export class TernaryOp extends OpVal {
     c;
     get level() { return 1; }
@@ -264,16 +266,9 @@ export class TernaryOp extends OpVal {
         this.c.vars(vars);
         return vars;
     }
-    /*override*/ *[Symbol.iterator]() {
-        yield this;
-        yield* this.a;
-        yield* this.b;
-        yield* this.c;
-    }
 }
 export class DicVal {
     data;
-    get op() { return 'dic'; }
     constructor(data) {
         this.data = data;
     }
@@ -296,20 +291,20 @@ export class DicVal {
     toJSON() {
         return '';
     }
-    analize(check) {
+    do(check) {
         for (let key in this.data) {
             let t = this.data[key], u = check(t);
             if (u)
                 this.data[key] = u;
             else
-                t.analize(check);
+                t.do(check);
         }
     }
-    *[Symbol.iterator]() {
-        yield this;
-        for (let k in this.data)
-            yield* this.data[k];
-    }
+    // *[Symbol.iterator]() {
+    //   yield this;
+    //   for (let k in this.data)
+    //     yield* this.data[k];
+    // }
     vars(vars) {
         for (let key in this.data)
             this.data[key].vars(vars);
@@ -318,7 +313,6 @@ export class DicVal {
 }
 export class SignalVal {
     signal;
-    get op() { return 'sig'; }
     //op: Operand = "_";
     //signal: '-' = '-';
     value;
@@ -365,18 +359,13 @@ export class SignalVal {
         t.value = this.value.translate(dir);
         return t;
     }
-    analize(check) {
+    do(check) {
         let t = check(this.value);
         if (t)
             this.value = t;
     }
-    *[Symbol.iterator]() {
-        yield this;
-        yield* this.value;
-    }
 }
 export class GroupVal {
-    get op() { return 'g'; }
     value;
     //async calcAsync(opts: CalcOptions): Promise<T> {
     //   return await this.value.calcAsync(opts);
@@ -395,7 +384,7 @@ export class GroupVal {
     toJSON() {
         return '(' + this.value + ')';
     }
-    analize(check) {
+    do(check) {
         let t = check(this.value);
         if (t)
             this.value = t;
@@ -409,15 +398,10 @@ export class GroupVal {
         t.value = this.value.translate(dir);
         return t;
     }
-    *[Symbol.iterator]() {
-        yield this;
-        yield* this.value;
-    }
 }
 export class FnVal {
     args;
     body;
-    get op() { return 'fn'; }
     //args: string[] = [];
     //body: IValue;
     constructor(args, body) {
@@ -426,7 +410,7 @@ export class FnVal {
     }
     valid() { return !!this.body; }
     push(val) {
-        if (val instanceof VarVal)
+        if (val instanceof Var)
             this.args.push(val.value);
         else
             throw null;
@@ -435,7 +419,7 @@ export class FnVal {
         var t = this.args;
         return (...args) => {
             return this.body.calc({
-                funcs: opts.funcs,
+                fn: opts.fn,
                 object: opts.object,
                 optional: opts.optional,
                 try: opts.try,
@@ -467,31 +451,38 @@ export class FnVal {
     translate(dir) {
         return new FnVal(this.args, this.body.translate(dir));
     }
-    analize(check) {
+    do(check) {
         let t = check(this.body);
         if (t)
             this.body = t;
     }
-    *[Symbol.iterator]() {
-        yield this;
+}
+function varcase(opts, fn) {
+    switch (opts.uncase) {
+        case "u":
+            return fn.toUpperCase();
+        case "l":
+            return fn.toLowerCase();
+        default:
+            return fn;
     }
 }
 export class CallVal {
     func;
     args;
-    get op() { return 'call'; }
     constructor(func, args = []) {
         this.func = func;
         this.args = args;
     }
     calc(opts) {
-        let args = this.args.map(a => a.calc(opts)), name = opts.uncase ? this.func.toLowerCase() : this.func, f = isF(opts.funcs);
+        let args = this.args.map(a => a.calc(opts));
+        let name = varcase(opts, this.func), f = isF(opts.fn);
         if (f) {
-            let v = opts.funcs(name, args);
+            let v = opts.fn(name, args);
             if (v !== void 0)
                 return v;
         }
-        let fx = (!f && opts.funcs) && opts.funcs[name] || (name in formulas ? formulas[name].calc : null);
+        let fx = (!f && opts.fn) && opts.fn[name] || (name in formulas ? formulas[name].calc : null);
         if (!fx)
             throw { msg: "not_found", name };
         return fx.apply(opts, args);
@@ -515,23 +506,17 @@ export class CallVal {
         t.args = this.args.map(a => a.translate(dir));
         return t;
     }
-    analize(check) {
+    do(check) {
         for (let i = 0, a = this.args; i < a.length; i++) {
             let t = a[i], u = check(t);
             if (u)
                 a[i] = u;
             else
-                t.analize(check);
+                t.do(check);
         }
     }
-    *[Symbol.iterator]() {
-        yield this;
-        for (let t of this.args)
-            yield* t;
-    }
 }
-export class NumbVal {
-    get op() { return 'n'; }
+export class Numb {
     value;
     constructor(value) {
         this.value = value;
@@ -541,30 +526,27 @@ export class NumbVal {
     }
     valid() { return true; }
     calc() {
-        return +this.value;
+        return this.value;
     }
     toString() { return this.toJSON(); }
     toJSON() {
-        return +this.value + '';
+        return this.value + '';
     }
     vars(vars = []) {
         return vars;
     }
-    analize(_) { }
+    do(_) { }
     translate(dir) { return this; }
-    *[Symbol.iterator]() {
-        yield this;
-    }
 }
-export class VarVal {
+export class Var {
     value;
-    get op() { return 'v'; }
     constructor(value) {
         this.value = value;
     }
     valid() { return true; }
     calc(opts) {
-        return isF(opts.vars) ? opts.vars(this.value) : opts.vars[this.value];
+        let v = varcase(opts, this.value);
+        return isF(opts.vars) ? opts.vars(v) : opts.vars[v];
     }
     toString() { return this.toJSON(); }
     toJSON() {
@@ -575,43 +557,34 @@ export class VarVal {
         return vars;
     }
     translate(dir) { return this; }
-    analize(_) { }
-    *[Symbol.iterator]() {
-        yield this;
-    }
+    do(_) { }
 }
-export class ConstVal {
+export class Const {
     value;
-    get op() { return 'c'; }
-    constructor(value) {
+    key;
+    constructor(value, key) {
         this.value = value;
+        this.key = key;
     }
     valid() { return true; }
-    calc(opts) {
-        return consts[this.value];
-    }
-    toString() { return this.value; }
-    toJSON() { return this.value; }
+    calc() { return this.value; }
+    toString() { return this.key; }
+    toJSON() { return this.key; }
     vars(vars = []) { return vars; }
     translate(dir) { return this; }
-    analize(_) { }
-    *[Symbol.iterator]() {
-        yield this;
-    }
+    do(_) { }
 }
-export const consts = { null: null, false: false, true: true };
-export class TextValue {
+export class Text {
     value;
     charCode;
-    get op() { return 't'; }
     constructor(value, charCode) {
         this.value = value;
         this.charCode = charCode;
     }
-    static create(text) {
-        return new TextValue(text, '"'.charCodeAt(0));
-    }
-    get char() { return String.fromCharCode(this.charCode); }
+    // static create(text: string) {
+    //   return new Text(text, '"'.charCodeAt(0));
+    // }
+    // get char() { return String.fromCharCode(this.charCode); }
     valid() { return true; }
     calc() {
         return this.value;
@@ -624,14 +597,10 @@ export class TextValue {
     }
     vars(vars = []) { return vars; }
     translate(dir) { return this; }
-    analize(_) { }
-    *[Symbol.iterator]() {
-        yield this;
-    }
+    do(_) { }
 }
 export class ObjectVal {
     levels;
-    get op() { return 'o'; }
     constructor(levels) {
         this.levels = levels;
     }
@@ -655,20 +624,70 @@ export class ObjectVal {
         return vars;
     }
     translate(dir) { return this; }
-    analize(_) { }
-    *[Symbol.iterator]() {
-        yield this;
-    }
+    do(_) { }
 }
-export const $ = {};
-export function analize(val, check) {
+function nToLetter(num) {
+    let letters = '';
+    while (num >= 0) {
+        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[num % 26] + letters;
+        num = Math.floor(num / 26) - 1;
+    }
+    return letters;
+}
+let letterToN = (v) => v.split('').reduce((r, a) => r * 26 + parseInt(a, 36) - 9, 0);
+export class RangeVal {
+    h0;
+    v0;
+    h1;
+    v1;
+    constructor(h0, v0, h1, v1) {
+        this.h0 = h0;
+        this.v0 = v0;
+        this.h1 = h1;
+        this.v1 = v1;
+    }
+    valid() { return true; }
+    calc(opts) {
+        let result = [];
+        if (isF(opts.vars)) {
+            throw "not implemented";
+        }
+        else {
+            let vars = opts.vars;
+            let { v0, v1, h0, h1 } = this;
+            if (v1 < v0)
+                [v1, v0] = [v0, v1];
+            if (h1 < h0)
+                [h1, h0] = [h0, h1];
+            for (let h = v0; h <= v1; h++)
+                for (let v = h0; v <= h1; v++) {
+                    let t = nToLetter(h) + v;
+                    if (t in vars)
+                        result.push(vars[t]);
+                }
+        }
+        return result;
+    }
+    toString() { return this.toJSON(); }
+    toJSON() {
+        let { v0, v1, h0, h1 } = this;
+        return `${nToLetter(h0)}${v0}:${nToLetter(h1)}${v1}`;
+    }
+    vars() {
+        throw null;
+    }
+    translate(dir) { return this; }
+    do(_) { }
+}
+const $ = {};
+export function analyze(val, check) {
     let t = check(val);
     if (t)
         return t;
-    val.analize(check);
+    val.do(check);
     return val;
 }
-export function clone(val) {
+function clone(val) {
     return new Parser(val.toString()).parse();
 }
 function has(value, check) {
@@ -755,75 +774,8 @@ class Parser {
         //  s.push(_new);
         //}
     }
-    parseString(i, exp, char) {
-        let temp1 = "", letter = exp.charCodeAt(i + 1);
-        //check se a letra não é " se for checa a proxima letra 
-        while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
-            //se chegar no final da expressão sem terminar a string
-            if (Number.isNaN(letter))
-                throw "error";
-            temp1 += exp[i + 1];
-            letter = exp.charCodeAt(++i + 1);
-        }
-        this.setMode(24578 /* PM.string */);
-        this.setStored(new TextValue(temp1, char));
-        return i;
-    }
-    parseVal(char, exp, i) {
-        let storedText = exp[i], l = exp.length;
-        //se for numero ou ponto
-        if ((char > 47 && char < 58) || char == 46) {
-            char = exp.charCodeAt(i + 1);
-            while (((char > 47 && char < 58) || char == 46) && i < l) {
-                storedText += exp[i + 1];
-                char = exp.charCodeAt(++i + 1);
-            }
-            this.setStored(new NumbVal(storedText));
-            this.setMode(24577 /* PM.number */);
-            //se for letra ou underscore
-            //letra minuscula>>>>>>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>>underscore>>>>>>at>>>>>>>>>>>>dois pontos
-        }
-        else if ((char > 96 && char < 123) || (char > 64 && char < 91) || char === 95 || char === 64 /* || letter == 58*/) {
-            let obj;
-            do {
-                char = exp.charCodeAt(i + 1);
-                //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
-                while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
-                    storedText += exp[i + 1];
-                    char = exp.charCodeAt(++i + 1);
-                }
-                //se for função
-                if (char == 40) {
-                    this.setMode(8199 /* PM.call */);
-                    this.scope.push(new CallVal(storedText));
-                    i++;
-                }
-                else /*se for object*/ if (char === 46) {
-                    obj ?
-                        obj.push(storedText) :
-                        (obj = [storedText]);
-                    //um passo para frente para passar o ponto
-                    //um passo para passar o primeiro caracter
-                    storedText = exp[i += 2];
-                }
-                else if (obj) {
-                    obj.push(storedText);
-                    this.setStored(new ObjectVal(obj));
-                    this.setMode(24624 /* PM.object */);
-                    obj = null;
-                }
-                else /*se for variavel*/ {
-                    this.setStored(storedText in consts ? new ConstVal(storedText) : new VarVal(storedText));
-                    this.setMode(24592 /* PM.variable */);
-                }
-            } while (obj);
-        }
-        else
-            throw `invalid expression character found '${exp[i]}'`;
-        return i;
-    }
-    parseDic() {
-    }
+    // parseString(i: number, exp: string, char: number) 
+    // parseVal(char: number, exp: string, i: number) 
     isCall(exp, i) {
         for (let l = exp.length - 3; i < l; i++) {
             if (exp[i] == '(')
@@ -858,6 +810,9 @@ class Parser {
             index: index,
             error: error
         };
+    }
+    err(i) {
+        return { index: i, exp: this.expression };
     }
     jumpSpace(exp, i) {
         while (exp[i] == ' ')
@@ -1167,22 +1122,35 @@ class Parser {
                 case 34:
                 // '
                 case 39:
-                    i = this.parseString(i, exp, char);
+                    {
+                        let temp1 = "";
+                        //para garantir que não é uma string vazia
+                        if (exp.charCodeAt(i + 1) != char) {
+                            let regex = char == 34 ? /[^"]"/ : /[^']'/;
+                            regex.lastIndex = i + 1;
+                            let t = regex.exec(exp);
+                            if (!t)
+                                throw 1;
+                            temp1 = exp.slice(i + 1, i = t.index);
+                        }
+                        this.setMode(24578 /* PM.string */);
+                        this.setStored(new Text(temp1, char));
+                        // letter = exp.charCodeAt(i + 1);
+                        // //check se a letra não é " se for checa a proxima letra 
+                        // while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
+                        //   //se chegar no final da expressão sem terminar a string
+                        //   if (Number.isNaN(letter))
+                        //     throw "error";
+                        //   temp1 += exp[i + 1];
+                        //   letter = exp.charCodeAt(++i + 1);
+                        // }
+                    }
                     break;
                 // ^
                 case 94:
                     this.appendOp(new PowOp());
                     this.setMode(4674 /* PM.power */);
                     break;
-                //// ; isso esta amais
-                //case 59: {
-                //  if (!(scope[scope.length - 2] instanceof FnVal))
-                //    throw "invalid expression";
-                //  this.setMode(PM.end);
-                //  let temp3 = scope.pop();
-                //  temp3.push(this.getStored());
-                //  this.setStored(temp3);
-                //} break;
                 // [
                 case 91:
                     break;
@@ -1190,7 +1158,97 @@ class Parser {
                 case 93:
                     break;
                 default:
-                    i = this.parseVal(char, exp, i);
+                    // i = this.parseVal(char, exp, i);
+                    {
+                        //se for numero ou ponto
+                        if ((char > 47 && char < 58) || char == 46) {
+                            let storedText = exp[i], l = exp.length;
+                            char = exp.charCodeAt(i + 1);
+                            while (((char > 47 && char < 58) || char == 46) && i < l) {
+                                storedText += exp[i + 1];
+                                char = exp.charCodeAt(++i + 1);
+                            }
+                            let t = +storedText;
+                            if (isNaN(t))
+                                throw this.err(i);
+                            this.setStored(new Numb(t));
+                            this.setMode(24577 /* PM.number */);
+                            //se for letra ou underscore
+                        }
+                        else {
+                            let regex = /[a-zA-Z_]\w*/g;
+                            regex.lastIndex = i;
+                            let t0 = regex.exec(exp);
+                            if (!t0 || t0.index != i)
+                                throw this.err(i);
+                            let t1 = t0[0];
+                            switch (exp[i += t1.length]) {
+                                case "(":
+                                    this.setMode(8199 /* PM.call */);
+                                    this.scope.push(new CallVal(t1));
+                                    i++;
+                                    break;
+                                case ".":
+                                    {
+                                        let obj = [t1];
+                                        do {
+                                            t0 = regex.exec(exp);
+                                            if (!t0 || t0.index != i + 1)
+                                                throw this.err(i);
+                                            obj.push(t0[0]);
+                                            if (exp[i += t1.length] != ".")
+                                                break;
+                                        } while (true);
+                                        this.setStored(new ObjectVal(obj));
+                                        this.setMode(24624 /* PM.object */);
+                                    }
+                                    break;
+                                case ":":
+                                    {
+                                        let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/;
+                                        regex.lastIndex = i - t0.length;
+                                        t0 = regex.exec(exp);
+                                        if (!t0 || t0.index != i + 1)
+                                            throw this.err(i);
+                                        this.setStored(new RangeVal(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
+                                        this.setMode(24656 /* PM.range */);
+                                    }
+                                    break;
+                                default: {
+                                    let t2 = varcase(options, t1);
+                                    this.setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
+                                    this.setMode(24592 /* PM.variable */);
+                                }
+                            }
+                            // //   letra minuscula              letra maiuscula            underscore
+                            // //  (char > 96 && char < 123) || (char > 64 && char < 91) || char === 95
+                            // if () {
+                            //   let obj: string[];
+                            //   do {
+                            //     char = exp.charCodeAt(i + 1);
+                            //     //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
+                            //     while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
+                            //       storedText += exp[i + 1];
+                            //       char = exp.charCodeAt(++i + 1);
+                            //     }
+                            //     //se for função
+                            //     if (char == 40) {
+                            //     } else /*se for object*/if (char === 46) {
+                            //       obj ?
+                            //         obj.push(storedText) :
+                            //         (obj = [storedText]);
+                            //       //um passo para frente para passar o ponto
+                            //       //um passo para passar o primeiro caracter
+                            //       storedText = exp[i += 2];
+                            //     } else if (obj) {
+                            //       obj = null;
+                            //     } else /*se for variavel*/ {
+                            //     }
+                            //   } while (obj);
+                            // } else throw `invalid expression character found '${exp[i]}'`;
+                        }
+                        // return i;
+                    }
             }
         }
         if (this.stored && scope.length)
@@ -1212,14 +1270,16 @@ class Parser {
     }
 }
 export function parse(exp, options) {
-    if (exp && typeof exp == "string")
+    if (exp && isS(exp))
         exp = new Parser(exp, options).parse();
     return exp;
 }
-export default function calc(exp, options) {
+export const consts = { null: null, false: false, true: true };
+export const options = {};
+export default function calc(exp, options = {}) {
     if (!exp)
         return null;
-    if (typeof exp === 'string') {
+    if (isS(exp)) {
         if (options.optional)
             if (exp[0] == '=')
                 exp = exp.substring(1);
@@ -1229,7 +1289,7 @@ export default function calc(exp, options) {
     }
     return exp.calc(options); //[, ]//;
 }
-export function calcAll(expressions, options) {
+function calcAll(expressions, options) {
     var result = {};
     for (let key in expressions)
         result[key] = calc(expressions[key], options);
