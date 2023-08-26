@@ -1141,9 +1141,6 @@ class Parser {
           this.appendOp(new DivOp());
           this.setMode(PM.div);
           break;
-
-
-        //!
         case 33:
           if (this.stored) {
             throw "invalid expression";
