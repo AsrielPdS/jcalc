@@ -2,14 +2,15 @@
   "compilerOptions": {
     "target": "ES2017",
     "removeComments": true,
-    "sourceMap": true,
-    "lib": [ "ES2021.String" ],
-    "declaration": false,
+    "lib": [
+      "ES2021.String",
+      "DOM"
+    ],
+    "declaration": true,
     "module": "ES2015",
     "alwaysStrict": true,
     "noImplicitThis": true
   },
-  "compileOnSave": false,
   "exclude": [
     "node_modules"
   ]

@@ -1,12 +1,13 @@
 {
   "name": "jcalc",
   "version": "2.0.1",
-  "description": "",
+  "description": "jcalc is an expression evaluater library with similar sintax to excel",
   "main": "jcalc.js",
   "type":"module",
   "keywords": [
     "math",
-    "expression"
+    "expression",
+    "excel"
   ],
   "scripts": {
     "min": "node -e \"import('./tasks.js').then(_=>_.minify())\""
@@ -14,9 +15,6 @@
   "author": {
     "name": "Asriel Pires",
     "email": "bebether@gmail.com"
-  },
-  "devDependencies": {
-    "@microsoft/api-extractor": "^7.36.4"
   },
   "license": "ISC"
 }
