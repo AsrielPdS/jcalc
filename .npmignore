@@ -1,2 +1,6 @@
 tsconfig.json
 jcalc.ts
+
+jcalc.test.d.ts
+jcalc.test.js
+jcalc.test.ts

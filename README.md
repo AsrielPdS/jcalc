@@ -13,7 +13,7 @@ calc("(1+2)^2") //-> 9
 calc("a+b*c",{vars:{a:1,b:2,c:3}}) //-> 7
 
 //fornecing formulas
-calc("upper('hello')",{fn:{upper:v=>vtoUpperCase()}}) //-> "HELLO"
+calc("upper('hello')",{fn:{upper:v=>v.toUpperCase()}}) //-> "HELLO"
 
 //string concat 
 calc("'hello '&w&'!'",{ vars:{w:"World"}}) // -> "hello world!"

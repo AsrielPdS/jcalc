@@ -9,6 +9,7 @@
     "declaration": true,
     "module": "ES2015",
     "alwaysStrict": true,
+    "moduleResolution": "NodeNext",
     "noImplicitThis": true
   },
   "exclude": [

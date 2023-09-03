@@ -17,6 +17,7 @@ export interface IValue {// extends Iterable<IValue>
   toJSON(): string;
   /**placeholder for render to the dom */
   render?(this: this): unknown;
+  clone?(): IValue;
   vars(vars?: string[]): string[];
   translate(dir: TranslateDir): IValue;
   do?(check: Check): void;
@@ -50,6 +51,12 @@ export abstract class OpVal implements IScopeValue {
 
     this.b = expression;
   }
+  clone() {
+    let r = new (this.constructor as any)() as OpVal;
+    r.a = this.a.clone();
+    r.b = this.b.clone();
+    return r;
+  }
   toString() { return this.toJSON(); }
   vars(vars: string[] = []) {
     this.a.vars(vars);
@@ -80,7 +87,7 @@ export abstract class OpVal implements IScopeValue {
   // }
   static op: string;
 }
-export class SumOp extends OpVal {
+export class Sum extends OpVal {
   get level() { return 4; }
 
   calc(opts: CalcOptions) {
@@ -104,7 +111,7 @@ export class SumOp extends OpVal {
 
   static /*override*/ op = '+';
 }
-export class TimeOp extends OpVal {
+export class Time extends OpVal {
   get level() { return 5; }
 
   calc(opts: CalcOptions) {
@@ -124,7 +131,7 @@ export class TimeOp extends OpVal {
   }
   static /*override*/ op = '*';
 }
-export class SubOp extends OpVal {
+export class Sub extends OpVal {
   get level() { return 4; }
 
   calc(opts: CalcOptions) {
@@ -145,7 +152,7 @@ export class SubOp extends OpVal {
   }
   static /*override*/ op = '-';
 }
-export class DivOp extends OpVal {
+export class Div extends OpVal {
   get level() { return 5; }
 
   calc(opts: CalcOptions) {
@@ -166,7 +173,7 @@ export class DivOp extends OpVal {
   }
   static /*override*/ op = '/';
 }
-export class EqualOp extends OpVal {
+export class Eq extends OpVal {
   get level() { return 2; }
 
   calc(opts: CalcOptions) {
@@ -177,7 +184,7 @@ export class EqualOp extends OpVal {
   }
   static /*override*/ op = '=';
 }
-export class AndOp extends OpVal {
+export class And extends OpVal {
   get level() { return 1; }
 
   calc(opts: CalcOptions) {
@@ -188,7 +195,7 @@ export class AndOp extends OpVal {
   }
   static /*override*/ op = '&&';
 }
-export class ConcatOp extends OpVal {
+export class Concat extends OpVal {
   get level() { return 3; }
 
   calc(opts: CalcOptions) {
@@ -314,7 +321,7 @@ export class TernaryOp extends OpVal {
       this.c.calc(opts);
   }
 
-    /*override*/  push(value: Val) {
+  /*override*/  push(value: Val) {
     if (this.b)
       if (this.c)
         throw null;
@@ -322,11 +329,11 @@ export class TernaryOp extends OpVal {
     else this.b = value;
   }
 
-    /*override*/   valid() { return !!this.c; }
-    /*override*/   render?(this: this): unknown;
+  /*override*/   valid() { return !!this.c; }
+  /*override*/   render?(this: this): unknown;
   toJSON() { return this.a + '?' + this.b + ':' + this.c; }
-    /*override*/   toString() { return this.toJSON(); }
-    /*override*/   vars(vars: string[] = []) {
+  /*override*/   toString() { return this.toJSON(); }
+  /*override*/   vars(vars: string[] = []) {
     this.a.vars(vars);
     this.b.vars(vars);
     this.c.vars(vars);
@@ -340,7 +347,7 @@ export class TernaryOp extends OpVal {
   // }
 }
 
-export class DicVal implements IValue {
+export class Pair implements IValue {
   //get op(): 'dic' { return 'dic'; }
   render?(this: this): unknown;
 
@@ -364,7 +371,7 @@ export class DicVal implements IValue {
     for (let k in this.data)
       nd[k] = this.data[k].translate(dir);
 
-    return new DicVal(this.data);
+    return new Pair(this.data);
   }
   toJSON(): string {
     return '';
@@ -383,7 +390,7 @@ export class DicVal implements IValue {
   // *[Symbol.iterator]() {
   //   yield this;
   //   for (let k in this.data)
-  //     yield* this.data[k];
+  //   yield* this.data[k];
   // }
   vars(vars?: string[]): string[] {
     for (let key in this.data)
@@ -426,7 +433,7 @@ export class SignalVal implements IScopeValue {
 
   //push(expression: IValue) {
   //   if (this.first)
-  //      throw "invalid";
+  //    throw "invalid";
   //   this.first = expression;
   //}
 
@@ -462,7 +469,7 @@ export class SignalVal implements IScopeValue {
   // }
 }
 
-export class GroupVal implements IScopeValue {
+export class Group implements IScopeValue {
   //get op(): 'g' { return 'g'; }
   render?(this: this): unknown;
   public value?: Val;
@@ -496,7 +503,7 @@ export class GroupVal implements IScopeValue {
     return vars;
   }
   translate(dir: TranslateDir) {
-    let t = new GroupVal();
+    let t = new Group();
     t.value = this.value.translate(dir)
     return t;
   }
@@ -505,7 +512,7 @@ export class GroupVal implements IScopeValue {
   //   yield* this.value;
   // }
 }
-export class FnVal implements IScopeValue {
+export class Fn implements IScopeValue {
   //get op(): 'fn' { return 'fn'; }
 
   render?(this: this): unknown;
@@ -550,7 +557,7 @@ export class FnVal implements IScopeValue {
     return this.body.vars(vars);
   }
   translate(dir: TranslateDir) {
-    return new FnVal(this.args, this.body.translate(dir));
+    return new Fn(this.args, this.body.translate(dir));
   }
 
   do(check: Check) {
@@ -572,7 +579,7 @@ function varcase(opts: GlobalOptions, fn: string) {
       return fn;
   }
 }
-export class CallVal implements IScopeValue {
+export class Call implements IScopeValue {
   //get op(): 'call' { return 'call'; }
   render?(this: this): unknown;
   constructor(public func: string, public args: Val[] = []) { }
@@ -609,7 +616,7 @@ export class CallVal implements IScopeValue {
   }
   translate(dir: TranslateDir) {
     //let formula = formulas[this.func.toLowerCase()];
-    let t = new CallVal($.translate(this.func, dir));
+    let t = new Call($.translate(this.func, dir));
     t.args = this.args.map(a => a.translate(dir));
     return t;
   }
@@ -626,11 +633,11 @@ export class CallVal implements IScopeValue {
   // *[Symbol.iterator]() {
   //   yield this;
   //   for (let t of this.args)
-  //     yield* t;
+  //   yield* t;
   // }
 }
 
-type AcceptScopeVal = GroupVal | FnVal | CallVal | OpVal | SignalVal;
+type AcceptScopeVal = Group | Fn | Call | OpVal | SignalVal;
 interface IValValue extends IValue {
   value: unknown;
 }
@@ -642,7 +649,7 @@ export class Numb implements IValValue {
   async calcAsync<T = any>(): Promise<T> {
     return this.value as any;
   }
-
+  clone() { return new Numb(this.value); }
   valid() { return true; }
   calc<T = any>(): T {
     return this.value as any;
@@ -665,6 +672,7 @@ export class Var implements IValValue {
   render?(this: this): unknown;
   constructor(public value: string) { }
 
+  clone() { return new Var(this.value); }
   valid() { return true; }
   calc(opts: CalcOptions) {
     let v = varcase(opts, this.value)
@@ -690,6 +698,7 @@ export class Const implements IValValue {
   render?(this: this): unknown;
   constructor(public value: any, public key: string) { }
 
+  clone() { return new Const(this.value, this.key); }
   valid() { return true; }
   calc() { return this.value; }
   toString() { return this.key; }
@@ -705,12 +714,13 @@ export class Const implements IValValue {
 export class Text implements IValValue {
   //get op(): 't' { return 't'; }
   render?(this: this): unknown;
-  constructor(public value: string, public charCode?: number) {
+  constructor(public value: string, public char?: number) {
   }
   // static create(text: string) {
   //   return new Text(text, '"'.charCodeAt(0));
   // }
-  // get char() { return String.fromCharCode(this.charCode); }
+  // get char() { return String.fromCharCode(this.char); }
+  clone() { return new Text(this.value, this.char); }
   valid() { return true; }
   calc<T = any>(): T {
     return this.value as any;
@@ -731,12 +741,12 @@ export class Text implements IValValue {
   // }
 }
 
-export class ObjectVal implements IValue {
+export class Obj implements IValue {
   //get op(): 'o' { return 'o'; }
   render?(this: this): unknown;
   constructor(public levels: string[]) { }
 
-
+  clone() { return new Obj(this.levels); }
   valid() { return true; }
   calc(opts: CalcOptions) {
     let
@@ -766,6 +776,7 @@ export class ObjectVal implements IValue {
   // }
 }
 function nToLetter(num: number) {
+  num--;
   let letters = ''
   while (num >= 0) {
     letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[num % 26] + letters
@@ -773,8 +784,8 @@ function nToLetter(num: number) {
   }
   return letters
 }
-let letterToN = (v: string) => v.split('').reduce((r, a) => r * 26 + parseInt(a, 36) - 9, 0);
-export class RangeVal implements IValue {
+export let letterToN = (v: string) => v.split('').reduce((r, a) => r * 26 + parseInt(a, 36) - 9, 0);
+export class Range implements IValue {
   //get op(): 'r' { return 'r'; }
   render?(this: this): unknown;
   constructor(public h0: number, public v0: number, public h1: number, public v1: number,) {
@@ -817,19 +828,19 @@ export class RangeVal implements IValue {
 
 //namespace _ {
 //  function v(value: string) {
-//    return new Var(value);
+//  return new Var(value);
 //  }
 //  function t(value: string) {
-//    return new Text(value);
+//  return new Text(value);
 //  }
 //  function ob(...args: string[]) {
-//    return new ObjectVal(args);
+//  return new ObjectVal(args);
 //  }
 //  function call(fn: string, ...args: Val[]) {
-//    return new CallVal(fn, args);
+//  return new CallVal(fn, args);
 //  }
 //}
-type AllVal = FnVal | DicVal | OpVal | GroupVal | SignalVal | SignalVal | TernaryOp | CallVal | Numb | Var | ObjectVal | Text;
+type AllVal = Fn | Pair | OpVal | Group | SignalVal | SignalVal | TernaryOp | Call | Numb | Var | Obj | Text;
 type Val = IValue; //
 
 type TranslateDir = 1 | -1;
@@ -843,9 +854,6 @@ export function analyze(val: Val, check: Check) {
     return t;
   val.do(check);
   return val;
-}
-function clone(val: Val) {
-  return new Parser(val.toString()).parse();
 }
 /** */
 interface DataType {
@@ -938,152 +946,117 @@ function has<T extends number>(value: T, check: T): boolean {
   return (value & check) === check;
 }
 
-interface ParseOptions {
-  warn?: boolean;
-  from?: number;
-  /**if true when scope stop in middle of expression don't throw error */
-  sub?: boolean;
-}
 class Parser {
   //GroupValue | OpValue | SignalValue | FuncValue | TernaryValue
   readonly scope: Array<AcceptScopeVal> = [];
   stored: Val;
   mode: PM = PM.begin;
-  expression: string;
   end: number;
-
-  constructor(exp: string, public options: ParseOptions = {}) {
-    if (!exp)
-      this.error('expression is null');
-    this.expression = exp;
-  }
-
-  popStored() {
-    if (!this.stored)
-      throw "invalid expression";
-    var temp = this.stored;
-    this.stored = null;
-    return temp;
-  }
-  setStored(value: Val) {
-    let s = this.scope, t = s[s.length - 1];
-    if (t && t instanceof SignalVal) {
-      s.pop();
-      t.value = value;
-      value = t;
-    }
-    this.stored = value;
-  }
-  setMode(mode: PM) {
-    let old = this.mode;
-    if (has(mode, PM.sep)) {
-      if (!has(old, PM.valueEnd))
-        throw 1;
-    } else if (has(mode, PM.signal)) {
-      if (!has(old, PM.begin) && !has(old, PM.sep))
-        throw 2;
-    } else if (has(mode, PM.valueStart)) {
-      if (has(old, PM.valueEnd))
-        throw 3;
-    } else if (has(mode, PM.valueEnd)) {
-      if (has(old, PM.sep) || has(old, PM.signal))
-        throw 4;
-    }
-    //if ((mode == PM.signal && old != PM.begin && old != PM.coma && old != PM.op) ||
-    //  (mode == PM.value && (old == PM.value || old == PM.end)) ||
-    //  ((mode == PM.op || mode == PM.end) && (old != PM.value && old != PM.fn && old != PM.end)) ||//(mode == PM.coma || mode == PM.begin || mode == PM.op || mode == PM.signal)
-    //  (mode == PM.begin && (old == PM.end || old == PM.value)) ||
-    //  (mode == PM.coma && (old == PM.begin || old == PM.signal || old == PM.coma))
-    //)
-    //  throw "invalid expression";
-    this.mode = mode;
-  }
-
-  appendOp(_new: OpVal) {
-    var
-      s = this.scope,
-      old = s[s.length - 1],
-      stored = this.popStored();
-
-    if (old instanceof OpVal) {
-
-      //assign: 2+3*4, 2*3^4
-      if (_new.level > old.level) {
-        _new.a = stored;
-        s.push(_new);//new OpValue(_new, stored)
-      }
-      //assign: 2*3+4,3^4+1, 2*3/4
-      else {
-        old.b = stored;
-
-        _new.a = old;
-        s[s.length - 1] = _new;
-      }
-
-    } else {
-      _new.a = stored;
-      s.push(_new);
-    }
-    //else {
-    //  _new.a = stored;
-    //  s.push(_new);
-    //}
-  }
-  // parseString(i: number, exp: string, char: number) 
-  // parseVal(char: number, exp: string, i: number) 
-  isCall(exp: string, i: number) {
-    for (let l = exp.length - 3; i < l; i++) {
-      if (exp[i] == '(')
-        return false;
-
-      if (exp[i] == ')')
-        return exp[i + 1] == '=' && exp[i + 2] == '>';
-    }
-    return false;
-  }
-  parseNumb(exp: String, i: number) {
-    let r = '', char = exp.charCodeAt(i);
-    //-
-    if (char == 45) {
-      r = '-';
-      char = exp.charCodeAt(++i);
-    }
-    for (; i < exp.length && ((char > 47 && char < 58) || char == 46); char = exp.charCodeAt(++i))
-      r += exp[i];
-    return r;
-  }
-  parseVar(exp: string, i: number) {
-
-    let r = '';
-    //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>letra minuscula>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>underscore
-    for (let char = exp.charCodeAt(i); i < exp.length && ((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95); char = exp.charCodeAt(++i)) {
-      r += exp[i];
-    }
-    return r;
-  }
-  error(error?: string, index?: number) {
-    throw {
-      expression: this.expression,
-      index: index,
-      error: error
-    };
-  }
-  err(i: number) {
-    return { index: i, exp: this.expression }
-  }
-  jumpSpace(exp: string, i: number) {
-    while (exp[i] == ' ')
-      i++;
-    return i;
-  }
-  parse(): Val {
+  parse(exp: string, options: ParseOptions): Val {
     let scope = this.scope;
+    let i = options.from || 0;
+    let setMode = (mode: PM) => {
+      let old = this.mode;
+      if (has(mode, PM.sep)) {
+        if (!has(old, PM.valueEnd))
+          throw err(i);
+      } else if (has(mode, PM.signal)) {
+        if (!has(old, PM.begin) && !has(old, PM.sep))
+          throw err(i);
+      } else if (has(mode, PM.valueStart)) {
+        if (has(old, PM.valueEnd))
+          throw err(i);
+      } else if (has(mode, PM.valueEnd)) {
+        if (has(old, PM.sep) || has(old, PM.signal))
+          throw err(i);
+      }
+      //if ((mode == PM.signal && old != PM.begin && old != PM.coma && old != PM.op) ||
+      //  (mode == PM.value && (old == PM.value || old == PM.end)) ||
+      //  ((mode == PM.op || mode == PM.end) && (old != PM.value && old != PM.fn && old != PM.end)) ||//(mode == PM.coma || mode == PM.begin || mode == PM.op || mode == PM.signal)
+      //  (mode == PM.begin && (old == PM.end || old == PM.value)) ||
+      //  (mode == PM.coma && (old == PM.begin || old == PM.signal || old == PM.coma))
+      //)
+      //  throw "invalid expression";
+      this.mode = mode;
+    }
+    let parseNumb = () => {
+      let r = '', char = exp.charCodeAt(i);
+      //-
+      if (char == 45) {
+        r = '-';
+        char = exp.charCodeAt(++i);
+      }
+      for (; i < exp.length && ((char > 47 && char < 58) || char == 46); char = exp.charCodeAt(++i))
+        r += exp[i];
+      return r;
+    }
+    let jumpSpace = () => {
+      while (exp[i] == ' ') i++;
+      return i;
+    }
+    let parseVar = () => {
+      let r = '';
+      //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>letra minuscula>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>underscore
+      for (let char = exp.charCodeAt(i); i < exp.length && ((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95); char = exp.charCodeAt(++i)) {
+        r += exp[i];
+      }
+      return r;
+    }
+    let setStored = (value: Val) => {
+      let s = this.scope, t = s[s.length - 1];
+      if (t && t instanceof SignalVal) {
+        s.pop();
+        t.value = value;
+        value = t;
+      }
+      this.stored = value;
+    }
+    let appendOp = (_new: OpVal) => {
+      var
+        s = this.scope,
+        old = s[s.length - 1],
+        stored = popStored();
 
+      if (old instanceof OpVal) {
+
+        //assign: 2+3*4, 2*3^4
+        if (_new.level > old.level) {
+          _new.a = stored;
+          s.push(_new);//new OpValue(_new, stored)
+        }
+        //assign: 2*3+4,3^4+1, 2*3/4
+        else {
+          old.b = stored;
+
+          _new.a = old;
+          s[s.length - 1] = _new;
+        }
+
+      } else {
+        _new.a = stored;
+        s.push(_new);
+      }
+      //else {
+      //  _new.a = stored;
+      //  s.push(_new);
+      //}
+    }
+    let popStored = () => {
+      if (!this.stored)
+        throw "invalid expression";
+      var temp = this.stored;
+      this.stored = null;
+      return temp;
+    }
+    let error = (error?: string, index?: number) => {
+      throw { exp, index, error };
+    }
+    let err = (i: number) => ({ index: i, exp: exp.slice(0, i + 1) });
     //let
     //  this.stored = this.this.stored,
     //  scope = this.scope;
 
-    for (let i = this.options.from || 0, exp = this.expression; i < exp.length; i++) {
+    for (; i < exp.length; i++) {
       let char = exp.charCodeAt(i);
       switch (char) {
         // space
@@ -1093,10 +1066,10 @@ class Parser {
         // +
         case 43:
           if (this.stored) {
-            this.appendOp(new SumOp());
-            this.setMode(PM.sum);
+            appendOp(new Sum());
+            setMode(PM.sum);
           } else {
-            this.setMode(PM.plus);
+            setMode(PM.plus);
             scope.push(new SignalVal(Signals.plus));
           }
           break;
@@ -1104,31 +1077,31 @@ class Parser {
         //-
         case 45:
           if (this.stored) {
-            this.appendOp(new SubOp());
-            this.setMode(PM.sub);
+            appendOp(new Sub());
+            setMode(PM.sub);
             //scope.push(new SubOpExpression(getStored()));
           } else {
-            this.setMode(PM.minus);
+            setMode(PM.minus);
             scope.push(new SignalVal(Signals.Minus));
           }
           break;
 
         //*
         case 42:
-          this.appendOp(new TimeOp());
-          this.setMode(PM.time);
+          appendOp(new Time());
+          setMode(PM.time);
           break;
 
         // /
         case 47:
-          this.appendOp(new DivOp());
-          this.setMode(PM.div);
+          appendOp(new Div());
+          setMode(PM.div);
           break;
         case 33:
           if (this.stored) {
             throw "invalid expression";
           } else {
-            this.setMode(PM.not);
+            setMode(PM.not);
             scope.push(new SignalVal(Signals.Not));
           }
           break;
@@ -1136,8 +1109,8 @@ class Parser {
         case 124:
           if (exp.charCodeAt(i + 1) === 124) {
             i++;
-            this.appendOp(new OrOp());
-            this.setMode(PM.or);
+            appendOp(new OrOp());
+            setMode(PM.or);
           } else throw "operator not found knowed";
 
           break;
@@ -1146,11 +1119,11 @@ class Parser {
         case 38:
           if (exp.charCodeAt(i + 1) === 38) {
             i++;
-            this.appendOp(new AndOp());
-            this.setMode(PM.and);
+            appendOp(new And());
+            setMode(PM.and);
           } else {
-            this.appendOp(new ConcatOp());
-            this.setMode(PM.concat);
+            appendOp(new Concat());
+            setMode(PM.concat);
           }
           break;
         // {
@@ -1158,32 +1131,32 @@ class Parser {
           //struct {p1:val1;p2:val2;p3:val3}
           let dic: Dic<Val> = {};
 
-          i = this.jumpSpace(exp, i);
+          jumpSpace();
           if (exp[++i] != '}')
             while (true) {
 
               //----------------------
-              let temp = this.parseVar(exp, i) || this.parseNumb(exp, i);
+              let temp = parseVar() || parseNumb();
               if (!temp.length)
-                this.error('error parse', i);
-              i += temp.length;
+                error('error parse', i);
+              // i += temp.length;
 
-              i = this.jumpSpace(exp, i);
+              jumpSpace();
 
               //----------------------
               //se depois da var não vier dois ponto deve dar erro
               if (exp[i++] != ':')
-                this.error('":" not found');
+                error('":" not found');
 
-              //i = this.jumpSpace(exp, i);
+              //jumpSpace();
 
               //----------------------
               //não precisa chacar espaço antes e depois porque o parse vai filtrar isto
-              let body = new Parser(exp, { from: i, sub: true, warn: this.options.warn });
-              dic[temp] = body.parse();
+              let body = new Parser;
+              dic[temp] = body.parse(exp, { from: i, sub: true, warn: options.warn });
 
               if (!(i = body.end))
-                this.error('');
+                error('');
 
               //----------------------
               //pula o ultima caracter da sub expression
@@ -1194,42 +1167,42 @@ class Parser {
 
               //----------------------
               if (i == exp.length)
-                this.error('unexpected end');
+                error('unexpected end');
 
               //----------------------
               if (exp[i] != ',')
-                this.error('"," not found');
+                error('"," not found');
 
               i++;
 
-              i = this.jumpSpace(exp, i);
+              jumpSpace();
             }
-          this.setStored(new DicVal(dic));
-          this.setMode(PM.dic);
+          setStored(new Pair(dic));
+          setMode(PM.dic);
         } break;
         // }
         case 125:
-          if (this.options.sub) {
+          if (options.sub) {
             this.end = i - 1;
             i = exp.length;
-          } else this.error('mas fim que inicio', i);
+          } else error('mas fim que inicio', i);
           break;
         // ?
         case 63: {
           if (exp.charCodeAt(i + 1) === 63) {
             i++;
-            this.appendOp(new NulledOp());
-            this.setMode(PM.or);
+            appendOp(new NulledOp());
+            setMode(PM.or);
           } else {
-            this.appendOp(new TernaryOp());
-            this.setMode(PM.Ter1);
+            appendOp(new TernaryOp());
+            setMode(PM.Ter1);
           }
         } break;
         // :
         case 58: {
-          this.setMode(PM.Ter2);
+          setMode(PM.Ter2);
           let
-            stored = this.popStored(),
+            stored = popStored(),
             before = scope[scope.length - 1];
 
           while (!(before instanceof TernaryOp)) {
@@ -1247,46 +1220,63 @@ class Parser {
           before.push(stored);
         } break;
         // ( 
-        case 40:
-          if (this.isCall(exp, i + 1)) {
-            let args: string[] = [];
+        case 40: {
+          let regex = /\(((?:\s*,?\s*(?:[a-zA-Z]\w*))*)?\s*\)=>/g;
+          regex.lastIndex = i;
+          let t0 = regex.exec(exp);
+          if (t0 && t0.index == i) {
+            // let args: string[] = [];
 
-            i = this.jumpSpace(exp, i);
+            // if (exp[++i] != ')')
+            //   while (true) {
 
-            if (exp[++i] != ')')
-              while (true) {
+            //     //----------------------
+            //     let temp = parseVar();
+            //     if (!temp.length)
+            //       error('error parse', i);
+            //     i += temp.length;
+            //     args.push(temp);
+            //     jumpSpace();
 
-                //----------------------
-                let temp = this.parseVar(exp, i);
-                if (!temp.length)
-                  this.error('error parse', i);
-                i += temp.length;
-                args.push(temp);
-                i = this.jumpSpace(exp, i);
+            //     //----------------------
+            //     /*não precisa checar se ja chegou no fim da string porque o isCall faz essa checagem*/
+            //     if (exp[i] == ')')
+            //       break;
 
-                //----------------------
-                /*não precisa checar se ja chegou no fim da string porque o isCall faz essa checagem*/
-                if (exp[i] == ')')
-                  break;
+            //     //----------------------
+            //     if (exp[i] != ',')
+            //       error('"," not found');
+            //     jumpSpace();
 
-                //----------------------
-                if (exp[i] != ',')
-                  this.error('"," not found');
-                i = this.jumpSpace(exp, i);
+            //     i++;
+            //   }
+            let body = new Parser();
 
-                i++;
-              }
-            let body = new Parser(exp, { from: i += 3, sub: true, warn: this.options.warn });
-
-            this.setStored(new FnVal(args, body.parse()));
-            this.setMode(PM.fn);
+            setStored(new Fn(t0[1] ? t0[1].split(',').map(v => v.trim()) : [], body.parse(exp, { from: i + t0[0].length, sub: true, warn: options.warn })));
+            setMode(PM.fn);
 
             i = body.end || exp.length;
 
           } else {
-            this.setMode(PM.open);
-            scope.push(new GroupVal());
+            setMode(PM.open);
+            scope.push(new Group());
           }
+
+          // let isCall = () => {
+
+          //   for (let l = exp.length - 3; i < l; i++) {
+          //     if (exp[i] == '(')
+          //       return false;
+
+          //     if (exp[i] == ')')
+          //       return exp[i + 1] == '=' && exp[i + 2] == '>';
+          //   }
+          //   return false;
+          // }
+          // if (isCall(i + 1)) {
+
+          // }
+        }
           break;
 
         // )
@@ -1297,12 +1287,12 @@ class Parser {
           //para evitar funcões(fn) sem parametro
           if (!has(this.mode, PM.open)) {
             if (lastScope)
-              lastScope.push(this.popStored());
-            else if (this.options.sub) {
+              lastScope.push(popStored());
+            else if (options.sub) {
               this.end = i - 1;
               i = exp.length;
               break;
-            } else this.error('mas fim que inicio', i);
+            } else error('mas fim que inicio', i);
           }
           //if (lastScope instanceof FnVal) {
 
@@ -1310,40 +1300,40 @@ class Parser {
           //} else lastScope.push(this.getStored());
 
           //o modo é posto depois para a fn poder checar o modo
-          this.setMode(PM.close);
+          setMode(PM.close);
 
-          while (!(lastScope instanceof CallVal) && !(lastScope instanceof GroupVal)) {
+          while (!(lastScope instanceof Call) && !(lastScope instanceof Group)) {
             let temp1 = lastScope;
 
             if (!scope.length)
-              if (this.options.sub) {
+              if (options.sub) {
                 this.end = i - 1;
                 i = exp.length;
                 break;
-              } else this.error('mas fim que inicio', i);
+              } else error('mas fim que inicio', i);
 
             (lastScope = scope.pop()).push(temp1);
           }
-          this.setStored(lastScope);
+          setStored(lastScope);
         } break;
         // ,
         case 44:
         // ;
         case 59: {
           //func(2+3*4,...;func(4,
-          this.setMode(PM.coma);
+          setMode(PM.coma);
           let before = scope[scope.length - 1];
-          let stored = this.popStored();
+          let stored = popStored();
 
-          while (!(before instanceof CallVal)) {
+          while (!(before instanceof Call)) {
             if (!before)
-              if (this.options.sub) {
+              if (options.sub) {
                 this.end = i - 1;
                 i = exp.length;
                 //adiciona denovo o stored para poder retornar no fim
-                this.setStored(stored);
+                setStored(stored);
                 break;
-              } else this.error('mas fim que inicio', i);
+              } else error('mas fim que inicio', i);
 
             scope.pop();
             //adiciona o valor guardado no escopo
@@ -1366,55 +1356,57 @@ class Parser {
           switch (exp.charCodeAt(i + 1)) {
             case 61:
               i++;
-              this.appendOp(new LesEqualOp());
-              this.setMode(PM.lessEqual);
+              appendOp(new LesEqualOp());
+              setMode(PM.lessEqual);
               break;
             case 62:
               i++;
-              this.appendOp(new DifOp());
-              this.setMode(PM.diferent);
+              appendOp(new DifOp());
+              setMode(PM.diferent);
               break;
             default:
-              this.appendOp(new LessOp());
-              this.setMode(PM.less);
+              appendOp(new LessOp());
+              setMode(PM.less);
           }
           break;
 
         // =
         case 61:
-          this.appendOp(new EqualOp());
-          this.setMode(PM.equal);
+          appendOp(new Eq());
+          setMode(PM.equal);
           break;
 
         // >
         case 62:
           if (exp.charCodeAt(i + 1) === 61) {
             i++;
-            this.appendOp(new GreaterEqualOp());
-          } else this.appendOp(new GreaterOp());
-          this.setMode(PM.greater);
+            appendOp(new GreaterEqualOp());
+          } else appendOp(new GreaterOp());
+          setMode(PM.greater);
           break;
         // "
         case 34:
         // '
         case 39: {
-          let temp1 = "";
+          let txt = "";
           //para garantir que não é uma string vazia
+
           if (exp.charCodeAt(i + 1) != char) {
-            let regex = char == 34 ? /[^"]"/ : /[^']'/;
+            let regex = char == 34 ? /[^"]"/g : /[^']'/g;
             regex.lastIndex = i + 1;
             let t = regex.exec(exp);
-            if (!t) throw 1;
-            temp1 = exp.slice(i + 1, i = t.index);
+            if (!t) throw err(i);
+            txt = exp.slice(i + 1, t.index + 1);
           }
-          this.setMode(PM.string);
-          this.setStored(new Text(temp1, char));
+          i += txt.length + 1;
+          setMode(PM.string);
+          setStored(new Text(txt, char));
           // letter = exp.charCodeAt(i + 1);
           // //check se a letra não é " se for checa a proxima letra 
           // while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
           //   //se chegar no final da expressão sem terminar a string
           //   if (Number.isNaN(letter))
-          //     throw "error";
+          //   throw "error";
           //   temp1 += exp[i + 1];
           //   letter = exp.charCodeAt(++i + 1);
           // }
@@ -1422,8 +1414,8 @@ class Parser {
 
         // ^
         case 94:
-          this.appendOp(new PowOp());
-          this.setMode(PM.power);
+          appendOp(new PowOp());
+          setMode(PM.power);
 
           break;
         // [
@@ -1446,73 +1438,75 @@ class Parser {
                 char = exp.charCodeAt(++i + 1);
               }
               let t = +storedText;
-              if (isNaN(t)) throw this.err(i);
-              this.setStored(new Numb(t));
-              this.setMode(PM.number);
+              if (isNaN(t)) throw err(i);
+              setStored(new Numb(t));
+              setMode(PM.number);
               //se for letra ou underscore
             } else {
               let regex = /[a-zA-Z_]\w*/g; regex.lastIndex = i;
               let t0 = regex.exec(exp);
-              if (!t0 || t0.index != i) throw this.err(i);
+              if (!t0 || t0.index != i) throw err(i);
               let t1 = t0[0];
-
-              switch (exp[i += t1.length]) {
+              let t2 = exp[i += t1.length];
+              switch (t2) {
                 case "(":
-                  this.setMode(PM.call);
-                  this.scope.push(new CallVal(t1));
-                  i++;
+                  setMode(PM.call);
+                  this.scope.push(new Call(t1));
                   break;
                 case ".": {
                   let obj = [t1];
                   do {
                     t0 = regex.exec(exp)
-                    if (!t0 || t0.index != i + 1) throw this.err(i);
+                    if (!t0 || t0.index != i + 1) throw err(i);
                     obj.push(t0[0]);
-                    if (exp[i += t1.length] != ".") break;
-                  } while (true)
-                  this.setStored(new ObjectVal(obj));
-                  this.setMode(PM.object);
-                } break;
-                case ":": {
-                  let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/;
-                  regex.lastIndex = i - t0.length;
-                  t0 = regex.exec(exp);
-                  if (!t0 || t0.index != i + 1) throw this.err(i);
+                    if (exp[i += t0[0].length] != ".") break;
+                  } while (true);
 
-                  this.setStored(new RangeVal(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
-                  this.setMode(PM.range);
+                  setStored(new Obj(obj));
+                  setMode(PM.object);
                 } break;
-                default: {
-                  let t2 = varcase(options, t1);
-                  this.setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
-                  this.setMode(PM.variable);
-                }
+                default:
+                  if (options.range && t2 == ":") {
+                    let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/g;
+                    regex.lastIndex = i -= t1.length;
+                    t0 = regex.exec(exp);
+                    if (!t0 || t0.index != i) throw err(i);
+
+                    setStored(new Range(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
+                    setMode(PM.range);
+                    i += t0[0].length;
+                  } else {
+                    let t2 = varcase(options, t1);
+                    setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
+                    setMode(PM.variable);
+                    i--;
+                  }
               }
-              // //   letra minuscula              letra maiuscula            underscore
+              // //   letra minuscula        letra maiuscula      underscore
               // //  (char > 96 && char < 123) || (char > 64 && char < 91) || char === 95
               // if () {
               //   let obj: string[];
               //   do {
-              //     char = exp.charCodeAt(i + 1);
-              //     //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
-              //     while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
-              //       storedText += exp[i + 1];
-              //       char = exp.charCodeAt(++i + 1);
-              //     }
-              //     //se for função
-              //     if (char == 40) {
-              //     } else /*se for object*/if (char === 46) {
-              //       obj ?
-              //         obj.push(storedText) :
-              //         (obj = [storedText]);
-              //       //um passo para frente para passar o ponto
-              //       //um passo para passar o primeiro caracter
-              //       storedText = exp[i += 2];
-              //     } else if (obj) {
-              //       obj = null;
-              //     } else /*se for variavel*/ {
+              //   char = exp.charCodeAt(i + 1);
+              //   //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
+              //   while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
+              //     storedText += exp[i + 1];
+              //     char = exp.charCodeAt(++i + 1);
+              //   }
+              //   //se for função
+              //   if (char == 40) {
+              //   } else /*se for object*/if (char === 46) {
+              //     obj ?
+              //     obj.push(storedText) :
+              //     (obj = [storedText]);
+              //     //um passo para frente para passar o ponto
+              //     //um passo para passar o primeiro caracter
+              //     storedText = exp[i += 2];
+              //   } else if (obj) {
+              //     obj = null;
+              //   } else /*se for variavel*/ {
 
-              //     }
+              //   }
               //   } while (obj);
               // } else throw `invalid expression character found '${exp[i]}'`;
             }
@@ -1522,7 +1516,7 @@ class Parser {
     }
 
     if (this.stored && scope.length)
-      scope[scope.length - 1].push(this.popStored());
+      scope[scope.length - 1].push(popStored());
     while (scope.length > 1) {
       let last = scope.pop();
       if (last instanceof OpVal)
@@ -1540,25 +1534,31 @@ class Parser {
     return scope[0] || this.stored;
   }
 }
-export function parse(exp: Expression, options?: ParseOptions): IValue {
+interface ParseOptions {
+  warn?: boolean;
+  from?: number;
+  /**if true when scope stop in middle of expression don't throw error */
+  sub?: boolean;
+  /**if should expect ranges in the expressions e.g:A3:D32 */
+  range?: boolean;
+}
+export function parse(exp: Expression, options: ParseOptions = {}): IValue {
   if (exp && isS(exp))
-    exp = new Parser(exp, options).parse()
+    exp = new Parser().parse(exp, options)
 
   return <IValue>exp;
 }
 
-export interface GlobalOptions {
+export interface GlobalOptions extends ParseOptions {
   object?: boolean;
   try?: boolean;
+  /**@deprecated ??? */
   optional?: boolean;
   uncase?: "u" | "l";
 }
 interface CalcOptions extends GlobalOptions {
   vars?: Dic<unknown> | ((name: string, obj?: boolean) => unknown)
   fn?: Dic<(this: this, ...params: unknown[]) => unknown> | ((name: string, params: unknown[]) => any);
-}
-interface DicCalcOptions extends CalcOptions {
-  vars?: Dic<unknown>;
 }
 export const consts: Dic<unknown> = { null: null, false: false, true: true };
 export const options: GlobalOptions = {}
@@ -1571,9 +1571,9 @@ export default function calc(exp: Expression, options: CalcOptions = {}) {
         exp = exp.substring(1);
       else return <unknown>exp;
 
-    exp = parse(exp);
+    exp = new Parser().parse(exp, options);
   }
-  return exp.calc(options);//[, ]//;
+  return exp.calc(options);
 }
 
 function calcAll(expressions: Dic<Expression>, options: CalcOptions): Dic<unknown> {

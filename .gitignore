@@ -1,5 +1,7 @@
 jcalc.js
 jcalc.d.ts
+jcalc.test.d.ts
+jcalc.test.js
 # Logs
 logs
 *.log
