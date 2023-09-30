@@ -1,3 +1,5 @@
+import { Options } from "ajv";
+
 interface Dic<T = any> { [key: string]: T; }
 type Check = (old: Val) => Val | void;
 
@@ -312,7 +314,7 @@ export class NulledOp extends OpVal {
   }
 }
 // export type OpVal = | SumOp | TimeOp | SubOp | DivOp | EqualOp | AndOp | ConcatOp | LesEqualOp | DifOp | LessOp | OrOp | GreaterEqualOp | GreaterOp | PowOp | NulledOp;
-export class TernaryOp extends OpVal {
+export class Ternary extends OpVal {
   c: Val;
   get level() { return 1; }
   calc(opts: CalcOptions) {
@@ -338,6 +340,13 @@ export class TernaryOp extends OpVal {
     this.b.vars(vars);
     this.c.vars(vars);
     return vars;
+  }
+  clone() {
+    let r = new Ternary;
+    r.a = this.a.clone();
+    r.b = this.b.clone();
+    r.c = this.c.clone();
+    return r;
   }
   // *[Symbol.iterator]() {
   //   yield this;
@@ -497,6 +506,12 @@ export class Group implements IScopeValue {
     let t = check(this.value);
     if (t)
       this.value = t;
+      else this.value.do(check);
+  }
+  clone() {
+    let r = new Group();
+    r.value = this.value.clone();
+    return r;
   }
   vars(vars: string[] = []) {
     this.value.vars(vars);
@@ -840,7 +855,7 @@ export class Range implements IValue {
 //  return new CallVal(fn, args);
 //  }
 //}
-type AllVal = Fn | Pair | OpVal | Group | SignalVal | SignalVal | TernaryOp | Call | Numb | Var | Obj | Text;
+type AllVal = Fn | Pair | OpVal | Group | SignalVal | SignalVal | Ternary | Call | Numb | Var | Obj | Text;
 type Val = IValue; //
 
 type TranslateDir = 1 | -1;
@@ -946,594 +961,6 @@ function has<T extends number>(value: T, check: T): boolean {
   return (value & check) === check;
 }
 
-class Parser {
-  //GroupValue | OpValue | SignalValue | FuncValue | TernaryValue
-  readonly scope: Array<AcceptScopeVal> = [];
-  stored: Val;
-  mode: PM = PM.begin;
-  end: number;
-  parse(exp: string, options: ParseOptions): Val {
-    let scope = this.scope;
-    let i = options.from || 0;
-    let setMode = (mode: PM) => {
-      let old = this.mode;
-      if (has(mode, PM.sep)) {
-        if (!has(old, PM.valueEnd))
-          throw err(i);
-      } else if (has(mode, PM.signal)) {
-        if (!has(old, PM.begin) && !has(old, PM.sep))
-          throw err(i);
-      } else if (has(mode, PM.valueStart)) {
-        if (has(old, PM.valueEnd))
-          throw err(i);
-      } else if (has(mode, PM.valueEnd)) {
-        if (has(old, PM.sep) || has(old, PM.signal))
-          throw err(i);
-      }
-      //if ((mode == PM.signal && old != PM.begin && old != PM.coma && old != PM.op) ||
-      //  (mode == PM.value && (old == PM.value || old == PM.end)) ||
-      //  ((mode == PM.op || mode == PM.end) && (old != PM.value && old != PM.fn && old != PM.end)) ||//(mode == PM.coma || mode == PM.begin || mode == PM.op || mode == PM.signal)
-      //  (mode == PM.begin && (old == PM.end || old == PM.value)) ||
-      //  (mode == PM.coma && (old == PM.begin || old == PM.signal || old == PM.coma))
-      //)
-      //  throw "invalid expression";
-      this.mode = mode;
-    }
-    let parseNumb = () => {
-      let r = '', char = exp.charCodeAt(i);
-      //-
-      if (char == 45) {
-        r = '-';
-        char = exp.charCodeAt(++i);
-      }
-      for (; i < exp.length && ((char > 47 && char < 58) || char == 46); char = exp.charCodeAt(++i))
-        r += exp[i];
-      return r;
-    }
-    let jumpSpace = () => {
-      while (exp[i] == ' ') i++;
-      return i;
-    }
-    let parseVar = () => {
-      let r = '';
-      //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>letra minuscula>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>underscore
-      for (let char = exp.charCodeAt(i); i < exp.length && ((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95); char = exp.charCodeAt(++i)) {
-        r += exp[i];
-      }
-      return r;
-    }
-    let setStored = (value: Val) => {
-      let s = this.scope, t = s[s.length - 1];
-      if (t && t instanceof SignalVal) {
-        s.pop();
-        t.value = value;
-        value = t;
-      }
-      this.stored = value;
-    }
-    let appendOp = (_new: OpVal) => {
-      var
-        s = this.scope,
-        old = s[s.length - 1],
-        stored = popStored();
-
-      if (old instanceof OpVal) {
-
-        //assign: 2+3*4, 2*3^4
-        if (_new.level > old.level) {
-          _new.a = stored;
-          s.push(_new);//new OpValue(_new, stored)
-        }
-        //assign: 2*3+4,3^4+1, 2*3/4
-        else {
-          old.b = stored;
-
-          _new.a = old;
-          s[s.length - 1] = _new;
-        }
-
-      } else {
-        _new.a = stored;
-        s.push(_new);
-      }
-      //else {
-      //  _new.a = stored;
-      //  s.push(_new);
-      //}
-    }
-    let popStored = () => {
-      if (!this.stored)
-        throw "invalid expression";
-      var temp = this.stored;
-      this.stored = null;
-      return temp;
-    }
-    let error = (error?: string, index?: number) => {
-      throw { exp, index, error };
-    }
-    let err = (i: number) => ({ index: i, exp: exp.slice(0, i + 1) });
-    //let
-    //  this.stored = this.this.stored,
-    //  scope = this.scope;
-
-    for (; i < exp.length; i++) {
-      let char = exp.charCodeAt(i);
-      switch (char) {
-        // space
-        case 32:
-          break;
-
-        // +
-        case 43:
-          if (this.stored) {
-            appendOp(new Sum());
-            setMode(PM.sum);
-          } else {
-            setMode(PM.plus);
-            scope.push(new SignalVal(Signals.plus));
-          }
-          break;
-
-        //-
-        case 45:
-          if (this.stored) {
-            appendOp(new Sub());
-            setMode(PM.sub);
-            //scope.push(new SubOpExpression(getStored()));
-          } else {
-            setMode(PM.minus);
-            scope.push(new SignalVal(Signals.Minus));
-          }
-          break;
-
-        //*
-        case 42:
-          appendOp(new Time());
-          setMode(PM.time);
-          break;
-
-        // /
-        case 47:
-          appendOp(new Div());
-          setMode(PM.div);
-          break;
-        case 33:
-          if (this.stored) {
-            throw "invalid expression";
-          } else {
-            setMode(PM.not);
-            scope.push(new SignalVal(Signals.Not));
-          }
-          break;
-        //||
-        case 124:
-          if (exp.charCodeAt(i + 1) === 124) {
-            i++;
-            appendOp(new OrOp());
-            setMode(PM.or);
-          } else throw "operator not found knowed";
-
-          break;
-
-        // &
-        case 38:
-          if (exp.charCodeAt(i + 1) === 38) {
-            i++;
-            appendOp(new And());
-            setMode(PM.and);
-          } else {
-            appendOp(new Concat());
-            setMode(PM.concat);
-          }
-          break;
-        // {
-        case 123: {
-          //struct {p1:val1;p2:val2;p3:val3}
-          let dic: Dic<Val> = {};
-
-          jumpSpace();
-          if (exp[++i] != '}')
-            while (true) {
-
-              //----------------------
-              let temp = parseVar() || parseNumb();
-              if (!temp.length)
-                error('error parse', i);
-              // i += temp.length;
-
-              jumpSpace();
-
-              //----------------------
-              //se depois da var não vier dois ponto deve dar erro
-              if (exp[i++] != ':')
-                error('":" not found');
-
-              //jumpSpace();
-
-              //----------------------
-              //não precisa chacar espaço antes e depois porque o parse vai filtrar isto
-              let body = new Parser;
-              dic[temp] = body.parse(exp, { from: i, sub: true, warn: options.warn });
-
-              if (!(i = body.end))
-                error('');
-
-              //----------------------
-              //pula o ultima caracter da sub expression
-              i++;
-              //----------------------
-              if (exp[i] == '}')
-                break;
-
-              //----------------------
-              if (i == exp.length)
-                error('unexpected end');
-
-              //----------------------
-              if (exp[i] != ',')
-                error('"," not found');
-
-              i++;
-
-              jumpSpace();
-            }
-          setStored(new Pair(dic));
-          setMode(PM.dic);
-        } break;
-        // }
-        case 125:
-          if (options.sub) {
-            this.end = i - 1;
-            i = exp.length;
-          } else error('mas fim que inicio', i);
-          break;
-        // ?
-        case 63: {
-          if (exp.charCodeAt(i + 1) === 63) {
-            i++;
-            appendOp(new NulledOp());
-            setMode(PM.or);
-          } else {
-            appendOp(new TernaryOp());
-            setMode(PM.Ter1);
-          }
-        } break;
-        // :
-        case 58: {
-          setMode(PM.Ter2);
-          let
-            stored = popStored(),
-            before = scope[scope.length - 1];
-
-          while (!(before instanceof TernaryOp)) {
-            scope.pop();
-            //adiciona o valor guardado no escopo
-            before.push(stored);
-            //depois o escopo passa a ser o valor guardado
-            stored = before;
-            //e o last scope passa a ser ultimo scope
-            before = scope[scope.length - 1];
-
-            if (!before)
-              throw "invalid expression";
-          }
-          before.push(stored);
-        } break;
-        // ( 
-        case 40: {
-          let regex = /\(((?:\s*,?\s*(?:[a-zA-Z]\w*))*)?\s*\)=>/g;
-          regex.lastIndex = i;
-          let t0 = regex.exec(exp);
-          if (t0 && t0.index == i) {
-            // let args: string[] = [];
-
-            // if (exp[++i] != ')')
-            //   while (true) {
-
-            //     //----------------------
-            //     let temp = parseVar();
-            //     if (!temp.length)
-            //       error('error parse', i);
-            //     i += temp.length;
-            //     args.push(temp);
-            //     jumpSpace();
-
-            //     //----------------------
-            //     /*não precisa checar se ja chegou no fim da string porque o isCall faz essa checagem*/
-            //     if (exp[i] == ')')
-            //       break;
-
-            //     //----------------------
-            //     if (exp[i] != ',')
-            //       error('"," not found');
-            //     jumpSpace();
-
-            //     i++;
-            //   }
-            let body = new Parser();
-
-            setStored(new Fn(t0[1] ? t0[1].split(',').map(v => v.trim()) : [], body.parse(exp, { from: i + t0[0].length, sub: true, warn: options.warn })));
-            setMode(PM.fn);
-
-            i = body.end || exp.length;
-
-          } else {
-            setMode(PM.open);
-            scope.push(new Group());
-          }
-
-          // let isCall = () => {
-
-          //   for (let l = exp.length - 3; i < l; i++) {
-          //     if (exp[i] == '(')
-          //       return false;
-
-          //     if (exp[i] == ')')
-          //       return exp[i + 1] == '=' && exp[i + 2] == '>';
-          //   }
-          //   return false;
-          // }
-          // if (isCall(i + 1)) {
-
-          // }
-        }
-          break;
-
-        // )
-        case 41: {
-          let lastScope = scope.pop();
-
-          //so adiciona o ultimo valor guardado se o ultimo scopo for fn mas o ultimo escopo não é o ultimo item inserido
-          //para evitar funcões(fn) sem parametro
-          if (!has(this.mode, PM.open)) {
-            if (lastScope)
-              lastScope.push(popStored());
-            else if (options.sub) {
-              this.end = i - 1;
-              i = exp.length;
-              break;
-            } else error('mas fim que inicio', i);
-          }
-          //if (lastScope instanceof FnVal) {
-
-          //  //se for so um grupo
-          //} else lastScope.push(this.getStored());
-
-          //o modo é posto depois para a fn poder checar o modo
-          setMode(PM.close);
-
-          while (!(lastScope instanceof Call) && !(lastScope instanceof Group)) {
-            let temp1 = lastScope;
-
-            if (!scope.length)
-              if (options.sub) {
-                this.end = i - 1;
-                i = exp.length;
-                break;
-              } else error('mas fim que inicio', i);
-
-            (lastScope = scope.pop()).push(temp1);
-          }
-          setStored(lastScope);
-        } break;
-        // ,
-        case 44:
-        // ;
-        case 59: {
-          //func(2+3*4,...;func(4,
-          setMode(PM.coma);
-          let before = scope[scope.length - 1];
-          let stored = popStored();
-
-          while (!(before instanceof Call)) {
-            if (!before)
-              if (options.sub) {
-                this.end = i - 1;
-                i = exp.length;
-                //adiciona denovo o stored para poder retornar no fim
-                setStored(stored);
-                break;
-              } else error('mas fim que inicio', i);
-
-            scope.pop();
-            //adiciona o valor guardado no escopo
-            before.push(stored);
-            //depois o escopo passa a ser o valor guardado
-            stored = before;
-            //e o last scope passa a ser ultimo scope
-            before = scope[scope.length - 1];
-            //if (!scope.length)
-            //  break;
-
-          }
-
-          if (before)
-            before.push(stored);
-
-        } break;
-        // <
-        case 60:
-          switch (exp.charCodeAt(i + 1)) {
-            case 61:
-              i++;
-              appendOp(new LesEqualOp());
-              setMode(PM.lessEqual);
-              break;
-            case 62:
-              i++;
-              appendOp(new DifOp());
-              setMode(PM.diferent);
-              break;
-            default:
-              appendOp(new LessOp());
-              setMode(PM.less);
-          }
-          break;
-
-        // =
-        case 61:
-          appendOp(new Eq());
-          setMode(PM.equal);
-          break;
-
-        // >
-        case 62:
-          if (exp.charCodeAt(i + 1) === 61) {
-            i++;
-            appendOp(new GreaterEqualOp());
-          } else appendOp(new GreaterOp());
-          setMode(PM.greater);
-          break;
-        // "
-        case 34:
-        // '
-        case 39: {
-          let txt = "";
-          //para garantir que não é uma string vazia
-
-          if (exp.charCodeAt(i + 1) != char) {
-            let regex = char == 34 ? /[^"]"/g : /[^']'/g;
-            regex.lastIndex = i + 1;
-            let t = regex.exec(exp);
-            if (!t) throw err(i);
-            txt = exp.slice(i + 1, t.index + 1);
-          }
-          i += txt.length + 1;
-          setMode(PM.string);
-          setStored(new Text(txt, char));
-          // letter = exp.charCodeAt(i + 1);
-          // //check se a letra não é " se for checa a proxima letra 
-          // while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
-          //   //se chegar no final da expressão sem terminar a string
-          //   if (Number.isNaN(letter))
-          //   throw "error";
-          //   temp1 += exp[i + 1];
-          //   letter = exp.charCodeAt(++i + 1);
-          // }
-        } break;
-
-        // ^
-        case 94:
-          appendOp(new PowOp());
-          setMode(PM.power);
-
-          break;
-        // [
-        case 91:
-          break;
-
-        // ]
-        case 93:
-          break;
-
-        default:
-          // i = this.parseVal(char, exp, i);
-          {
-            //se for numero ou ponto
-            if ((char > 47 && char < 58) || char == 46) {
-              let storedText = exp[i], l = exp.length;
-              char = exp.charCodeAt(i + 1);
-              while (((char > 47 && char < 58) || char == 46) && i < l) {
-                storedText += exp[i + 1];
-                char = exp.charCodeAt(++i + 1);
-              }
-              let t = +storedText;
-              if (isNaN(t)) throw err(i);
-              setStored(new Numb(t));
-              setMode(PM.number);
-              //se for letra ou underscore
-            } else {
-              let regex = /[a-zA-Z_]\w*/g; regex.lastIndex = i;
-              let t0 = regex.exec(exp);
-              if (!t0 || t0.index != i) throw err(i);
-              let t1 = t0[0];
-              let t2 = exp[i += t1.length];
-              switch (t2) {
-                case "(":
-                  setMode(PM.call);
-                  this.scope.push(new Call(t1));
-                  break;
-                case ".": {
-                  let obj = [t1];
-                  do {
-                    t0 = regex.exec(exp)
-                    if (!t0 || t0.index != i + 1) throw err(i);
-                    obj.push(t0[0]);
-                    if (exp[i += t0[0].length] != ".") break;
-                  } while (true);
-
-                  setStored(new Obj(obj));
-                  setMode(PM.object);
-                } break;
-                default:
-                  if (options.range && t2 == ":") {
-                    let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/g;
-                    regex.lastIndex = i -= t1.length;
-                    t0 = regex.exec(exp);
-                    if (!t0 || t0.index != i) throw err(i);
-
-                    setStored(new Range(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
-                    setMode(PM.range);
-                    i += t0[0].length;
-                  } else {
-                    let t2 = varcase(options, t1);
-                    setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
-                    setMode(PM.variable);
-                    i--;
-                  }
-              }
-              // //   letra minuscula        letra maiuscula      underscore
-              // //  (char > 96 && char < 123) || (char > 64 && char < 91) || char === 95
-              // if () {
-              //   let obj: string[];
-              //   do {
-              //   char = exp.charCodeAt(i + 1);
-              //   //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
-              //   while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
-              //     storedText += exp[i + 1];
-              //     char = exp.charCodeAt(++i + 1);
-              //   }
-              //   //se for função
-              //   if (char == 40) {
-              //   } else /*se for object*/if (char === 46) {
-              //     obj ?
-              //     obj.push(storedText) :
-              //     (obj = [storedText]);
-              //     //um passo para frente para passar o ponto
-              //     //um passo para passar o primeiro caracter
-              //     storedText = exp[i += 2];
-              //   } else if (obj) {
-              //     obj = null;
-              //   } else /*se for variavel*/ {
-
-              //   }
-              //   } while (obj);
-              // } else throw `invalid expression character found '${exp[i]}'`;
-            }
-            // return i;
-          }
-      }
-    }
-
-    if (this.stored && scope.length)
-      scope[scope.length - 1].push(popStored());
-    while (scope.length > 1) {
-      let last = scope.pop();
-      if (last instanceof OpVal)
-        scope[scope.length - 1].push(last);
-      else throw "invalid expression";
-    }
-    //se o ultimo scope não for op
-    if (scope.length && !(scope[0] instanceof OpVal))
-      throw "invalid expression";
-
-    if (this.mode == PM.begin || this.mode == PM.signal || this.mode == PM.op)
-      throw "invalid expression";
-    //return i;
-
-    return scope[0] || this.stored;
-  }
-}
 interface ParseOptions {
   warn?: boolean;
   from?: number;
@@ -1541,12 +968,557 @@ interface ParseOptions {
   sub?: boolean;
   /**if should expect ranges in the expressions e.g:A3:D32 */
   range?: boolean;
+  end?: number;
 }
-export function parse(exp: Expression, options: ParseOptions = {}): IValue {
-  if (exp && isS(exp))
-    exp = new Parser().parse(exp, options)
+export function parse(exp: string, options: ParseOptions = {}): IValue {
+  // parse(exp: string, options: ParseOptions): Val {
+  let scope: Array<AcceptScopeVal> = [];
+  let stored: Val;
+  let mode: PM = PM.begin;
+  let i = options.from || 0, l = exp.length;
 
-  return <IValue>exp;
+  let setMode = (newMode: PM) => {
+    if (has(newMode, PM.sep)) {
+      if (!has(mode, PM.valueEnd))
+        throw err(i);
+    } else if (has(newMode, PM.signal)) {
+      if (!has(mode, PM.begin) && !has(mode, PM.sep))
+        throw err(i);
+    } else if (has(newMode, PM.valueStart)) {
+      if (has(mode, PM.valueEnd))
+        throw err(i);
+    } else if (has(newMode, PM.valueEnd)) {
+      if (has(mode, PM.sep) || has(mode, PM.signal))
+        throw err(i);
+    }
+    mode = newMode;
+  }
+  let parseNumb = () => {
+    let r = '', char = exp.charCodeAt(i);
+    //-
+    if (char == 45) {
+      r = '-';
+      char = exp.charCodeAt(++i);
+    }
+    for (; i < l && ((char > 47 && char < 58) || char == 46); char = exp.charCodeAt(++i))
+      r += exp[i];
+    return r;
+  }
+  let jumpSpace = () => {
+    while (exp[i] == ' ') i++;
+    return i;
+  }
+  let parseVar = () => {
+    let r = '';
+    //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>letra minuscula>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>underscore
+    for (let char = exp.charCodeAt(i); i < l && ((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95); char = exp.charCodeAt(++i)) {
+      r += exp[i];
+    }
+    return r;
+  }
+  let setStored = (value: Val) => {
+    let s = scope, t = s[s.length - 1];
+    if (t && t instanceof SignalVal) {
+      s.pop();
+      t.value = value;
+      value = t;
+    }
+    stored = value;
+  }
+  let appendOp = (_new: OpVal) => {
+    var
+      s = scope,
+      old = s[s.length - 1],
+      stored = popStored();
+
+    if (old instanceof OpVal) {
+
+      //assign: 2+3*4, 2*3^4
+      if (_new.level > old.level) {
+        _new.a = stored;
+        s.push(_new);//new OpValue(_new, stored)
+      }
+      //assign: 2*3+4,3^4+1, 2*3/4
+      else {
+        old.b = stored;
+
+        _new.a = old;
+        s[s.length - 1] = _new;
+      }
+
+    } else {
+      _new.a = stored;
+      s.push(_new);
+    }
+    //else {
+    //  _new.a = stored;
+    //  s.push(_new);
+    //}
+  }
+  let popStored = () => {
+    if (!stored)
+      throw "invalid expression";
+    var temp = stored;
+    stored = null;
+    return temp;
+  }
+  let error = (error?: string, index?: number) => {
+    throw { exp, index, error };
+  }
+  let err = (i: number) => ({ index: i, exp: exp.slice(0, i + 1) });
+  //let
+  //  stored = this.stored,
+  //  scope = scope;
+
+  for (; i < l; i++) {
+    let char = exp.charCodeAt(i);
+    switch (char) {
+      // space
+      case 32:
+        break;
+
+      // +
+      case 43:
+        if (stored) {
+          appendOp(new Sum());
+          setMode(PM.sum);
+        } else {
+          setMode(PM.plus);
+          scope.push(new SignalVal(Signals.plus));
+        }
+        break;
+
+      //-
+      case 45:
+        if (stored) {
+          appendOp(new Sub());
+          setMode(PM.sub);
+          //scope.push(new SubOpExpression(getStored()));
+        } else {
+          setMode(PM.minus);
+          scope.push(new SignalVal(Signals.Minus));
+        }
+        break;
+
+      //*
+      case 42:
+        appendOp(new Time());
+        setMode(PM.time);
+        break;
+
+      // /
+      case 47:
+        appendOp(new Div());
+        setMode(PM.div);
+        break;
+      case 33:
+        if (stored) {
+          throw "invalid expression";
+        } else {
+          setMode(PM.not);
+          scope.push(new SignalVal(Signals.Not));
+        }
+        break;
+      //||
+      case 124:
+        if (exp.charCodeAt(i + 1) === 124) {
+          i++;
+          appendOp(new OrOp());
+          setMode(PM.or);
+        } else throw "operator not found knowed";
+
+        break;
+
+      // &
+      case 38:
+        if (exp.charCodeAt(i + 1) === 38) {
+          i++;
+          appendOp(new And());
+          setMode(PM.and);
+        } else {
+          appendOp(new Concat());
+          setMode(PM.concat);
+        }
+        break;
+      // {
+      case 123: {
+        //struct {p1:val1;p2:val2;p3:val3}
+        let dic: Dic<Val> = {};
+
+        jumpSpace();
+        if (exp[++i] != '}')
+          while (true) {
+
+            //----------------------
+            let temp = parseVar() || parseNumb();
+            if (!temp.length)
+              error('error parse', i);
+            // i += temp.length;
+
+            jumpSpace();
+
+            //----------------------
+            //se depois da var não vier dois ponto deve dar erro
+            if (exp[i++] != ':')
+              error('":" not found');
+
+            //jumpSpace();
+
+            //----------------------
+            //não precisa chacar espaço antes e depois porque o parse vai filtrar isto
+            let subOp: ParseOptions = { from: i, sub: true, warn: options.warn };
+            dic[temp] = parse(exp, subOp);
+
+            if (!(i = subOp.end))
+              err(i);
+
+            //----------------------
+            // pula o ultima caracter da sub expression
+            i++;
+            //----------------------
+            if (exp[i] == '}')
+              break;
+
+            //----------------------
+            if (i == l)
+              error('unexpected end');
+
+            //----------------------
+            if (exp[i] != ',')
+              error('"," not found');
+
+            i++;
+
+            jumpSpace();
+          }
+        setStored(new Pair(dic));
+        setMode(PM.dic);
+      } break;
+      // }
+      case 125:
+        if (options.sub) {
+          options.end = i - 1;
+          i = l;
+        } else error('mas fim que inicio', i);
+        break;
+      // ?
+      case 63: {
+        if (exp.charCodeAt(i + 1) === 63) {
+          i++;
+          appendOp(new NulledOp());
+          setMode(PM.or);
+        } else {
+          appendOp(new Ternary());
+          setMode(PM.Ter1);
+        }
+      } break;
+      // :
+      case 58: {
+        setMode(PM.Ter2);
+        let stored = popStored();
+        let before = scope[scope.length - 1];
+
+        while (!(before instanceof Ternary)) {
+          scope.pop();
+          //adiciona o valor guardado no escopo
+          before.push(stored);
+          //depois o escopo passa a ser o valor guardado
+          stored = before;
+          //e o last scope passa a ser ultimo scope
+          before = scope[scope.length - 1];
+
+          if (!before)
+            throw "invalid expression";
+        }
+        before.push(stored);
+      } break;
+      // ( 
+      case 40: {
+        let regex = /\(((?:\s*,?\s*(?:[a-zA-Z]\w*))*)?\s*\)=>/g;
+        regex.lastIndex = i;
+        let t0 = regex.exec(exp);
+        if (t0 && t0.index == i) {
+          let subOp: ParseOptions = { from: i + t0[0].length, sub: true, warn: options.warn };
+          setStored(new Fn(t0[1] ? t0[1].split(',').map(v => v.trim()) : [], parse(exp, subOp)));
+          setMode(PM.fn);
+
+          i = subOp.end || l;
+
+        } else {
+          setMode(PM.open);
+          scope.push(new Group());
+        }
+
+        // let isCall = () => {
+
+        //   for (let l = eeel - 3; i < l; i++) {
+        //     if (exp[i] == '(')
+        //       return false;
+
+        //     if (exp[i] == ')')
+        //       return exp[i + 1] == '=' && exp[i + 2] == '>';
+        //   }
+        //   return false;
+        // }
+        // if (isCall(i + 1)) {
+
+        // }
+      }
+        break;
+
+      // )
+      case 41: {
+        let lastScope = scope.pop();
+
+        //so adiciona o ultimo valor guardado se o ultimo scopo for fn mas o ultimo escopo não é o ultimo item inserido
+        //para evitar funcões(fn) sem parametro
+        if (!has(mode, PM.open)) {
+          if (lastScope)
+            lastScope.push(popStored());
+          else if (options.sub) {
+            options.end = i - 1;
+            i = l;
+            break;
+          } else error('mas fim que inicio', i);
+        }
+        //if (lastScope instanceof FnVal) {
+
+        //  //se for so um grupo
+        //} else lastScope.push(this.getStored());
+
+        //o modo é posto depois para a fn poder checar o modo
+        setMode(PM.close);
+
+        while (!(lastScope instanceof Call) && !(lastScope instanceof Group)) {
+          let temp1 = lastScope;
+
+          if (!scope.length)
+            if (options.sub) {
+              options.end = i - 1;
+              i = l;
+              break;
+            } else error('mas fim que inicio', i);
+
+          (lastScope = scope.pop()).push(temp1);
+        }
+        setStored(lastScope);
+      } break;
+      // ,
+      case 44:
+      // ;
+      case 59: {
+        //func(2+3*4,...;func(4,
+        setMode(PM.coma);
+        let before = scope[scope.length - 1];
+        let stored = popStored();
+
+        while (!(before instanceof Call)) {
+          if (!before)
+            if (options.sub) {
+              options.end = i - 1;
+              i = l;
+              //adiciona denovo o stored para poder retornar no fim
+              setStored(stored);
+              break;
+            } else error('mas fim que inicio', i);
+
+          scope.pop();
+          //adiciona o valor guardado no escopo
+          before.push(stored);
+          //depois o escopo passa a ser o valor guardado
+          stored = before;
+          //e o last scope passa a ser ultimo scope
+          before = scope[scope.length - 1];
+          //if (!scope.length)
+          //  break;
+
+        }
+
+        if (before)
+          before.push(stored);
+
+      } break;
+      // <
+      case 60:
+        switch (exp.charCodeAt(i + 1)) {
+          case 61:
+            i++;
+            appendOp(new LesEqualOp());
+            setMode(PM.lessEqual);
+            break;
+          case 62:
+            i++;
+            appendOp(new DifOp());
+            setMode(PM.diferent);
+            break;
+          default:
+            appendOp(new LessOp());
+            setMode(PM.less);
+        }
+        break;
+
+      // =
+      case 61:
+        appendOp(new Eq());
+        setMode(PM.equal);
+        break;
+
+      // >
+      case 62:
+        if (exp.charCodeAt(i + 1) === 61) {
+          i++;
+          appendOp(new GreaterEqualOp());
+        } else appendOp(new GreaterOp());
+        setMode(PM.greater);
+        break;
+      // "
+      case 34:
+      // '
+      case 39: {
+        let txt = "";
+        //para garantir que não é uma string vazia
+
+        if (exp.charCodeAt(i + 1) != char) {
+          let regex = char == 34 ? /[^"]"/g : /[^']'/g;
+          regex.lastIndex = i + 1;
+          let t = regex.exec(exp);
+          if (!t) throw err(i);
+          txt = exp.slice(i + 1, t.index + 1);
+        }
+        i += txt.length + 1;
+        setMode(PM.string);
+        setStored(new Text(txt, char));
+        // letter = exp.charCodeAt(i + 1);
+        // //check se a letra não é " se for checa a proxima letra 
+        // while (letter != char || ((letter = exp.charCodeAt(++i + 1)) == char)) {
+        //   //se chegar no final da expressão sem terminar a string
+        //   if (Number.isNaN(letter))
+        //   throw "error";
+        //   temp1 += exp[i + 1];
+        //   letter = exp.charCodeAt(++i + 1);
+        // }
+      } break;
+
+      // ^
+      case 94:
+        appendOp(new PowOp());
+        setMode(PM.power);
+
+        break;
+      // [
+      case 91:
+        break;
+
+      // ]
+      case 93:
+        break;
+
+      default:
+        // i = this.parseVal(char, exp, i);
+        {
+          //se for numero ou ponto
+          if ((char > 47 && char < 58) || char == 46) {
+            let storedText = exp[i];
+            char = exp.charCodeAt(i + 1);
+            while (((char > 47 && char < 58) || char == 46) && i < l) {
+              storedText += exp[i + 1];
+              char = exp.charCodeAt(++i + 1);
+            }
+            let t = +storedText;
+            if (isNaN(t)) throw err(i);
+            setStored(new Numb(t));
+            setMode(PM.number);
+            //se for letra ou underscore
+          } else {
+            let regex = /[a-zA-Z_]\w*/g; regex.lastIndex = i;
+            let t0 = regex.exec(exp);
+            if (!t0 || t0.index != i) throw err(i);
+            let t1 = t0[0];
+            let t2 = exp[i += t1.length];
+            switch (t2) {
+              case "(":
+                setMode(PM.call);
+                scope.push(new Call(t1));
+                break;
+              case ".": {
+                let obj = [t1];
+                do {
+                  t0 = regex.exec(exp)
+                  if (!t0 || t0.index != i + 1) throw err(i);
+                  obj.push(t0[0]);
+                  if (exp[i += t0[0].length] != ".") break;
+                } while (true);
+
+                setStored(new Obj(obj));
+                setMode(PM.object);
+              } break;
+              default:
+                if (options.range && t2 == ":") {
+                  let regex = /([A-Z]+)(\d+):([A-Z]+)(\d+)/g;
+                  regex.lastIndex = i -= t1.length;
+                  t0 = regex.exec(exp);
+                  if (!t0 || t0.index != i) throw err(i);
+
+                  setStored(new Range(letterToN(t0[1]), +t0[2], letterToN(t0[3]), +t0[4]));
+                  setMode(PM.range);
+                  i += t0[0].length;
+                } else {
+                  let t2 = varcase(options, t1);
+                  setStored(t2 in consts ? new Const(consts[t2], t1) : new Var(t1));
+                  setMode(PM.variable);
+                  i--;
+                }
+            }
+            // //   letra minuscula        letra maiuscula      underscore
+            // //  (char > 96 && char < 123) || (char > 64 && char < 91) || char === 95
+            // if () {
+            //   let obj: string[];
+            //   do {
+            //   char = exp.charCodeAt(i + 1);
+            //   //>>>>>>>letra minuscula>>>>>>>>>>>>>>>>>>letra maiuscula>>>>>>>>>>>>>>>>>numero>>>>>>>>>>>>>>>>>>>>>>>>>underscore>>>>>>dois pontos
+            //   while (((char > 96 && char < 123) || (char > 64 && char < 91) || (char > 47 && char < 58) || char == 95 /*|| char == 58*/) && i < l) {
+            //     storedText += exp[i + 1];
+            //     char = exp.charCodeAt(++i + 1);
+            //   }
+            //   //se for função
+            //   if (char == 40) {
+            //   } else /*se for object*/if (char === 46) {
+            //     obj ?
+            //     obj.push(storedText) :
+            //     (obj = [storedText]);
+            //     //um passo para frente para passar o ponto
+            //     //um passo para passar o primeiro caracter
+            //     storedText = exp[i += 2];
+            //   } else if (obj) {
+            //     obj = null;
+            //   } else /*se for variavel*/ {
+
+            //   }
+            //   } while (obj);
+            // } else throw `invalid expression character found '${exp[i]}'`;
+          }
+          // return i;
+        }
+    }
+  }
+
+  if (stored && scope.length)
+    scope[scope.length - 1].push(popStored());
+  while (scope.length > 1) {
+    let last = scope.pop();
+    if (last instanceof OpVal)
+      scope[scope.length - 1].push(last);
+    else throw "invalid expression";
+  }
+  //se o ultimo scope não for op
+  if (scope.length && !(scope[0] instanceof OpVal))
+    throw "invalid expression";
+
+  if (mode == PM.begin || mode == PM.signal || mode == PM.op)
+    throw "invalid expression";
+  //return i;
+
+  return scope[0] || stored;
 }
 
 export interface GlobalOptions extends ParseOptions {
@@ -1571,7 +1543,7 @@ export default function calc(exp: Expression, options: CalcOptions = {}) {
         exp = exp.substring(1);
       else return <unknown>exp;
 
-    exp = new Parser().parse(exp, options);
+    exp = parse(exp, options);
   }
   return exp.calc(options);
 }
