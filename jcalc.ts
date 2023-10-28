@@ -471,6 +471,7 @@ export class SignalVal implements IScopeValue {
     let t = check(this.value);
     if (t)
       this.value = t;
+    else this.value.do(check);
   }
   // *[Symbol.iterator]() {
   //   yield this;
@@ -506,7 +507,7 @@ export class Group implements IScopeValue {
     let t = check(this.value);
     if (t)
       this.value = t;
-      else this.value.do(check);
+    else this.value.do(check);
   }
   clone() {
     let r = new Group();

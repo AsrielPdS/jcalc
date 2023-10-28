@@ -1,6 +1,6 @@
 {
   "name": "jcalc",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "jcalc is an expression evaluater library with similar sintax to excel",
   "main": "jcalc.js",
   "type":"module",
