@@ -1,5 +1,3 @@
-import { Options } from "ajv";
-
 interface Dic<T = any> { [key: string]: T; }
 type Check = (old: Val) => Val | void;
 

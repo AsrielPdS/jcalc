@@ -1,15 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ESNext",
     "removeComments": true,
-    "lib": [
-      "ES2021.String",
-      "DOM"
-    ],
     "declaration": true,
-    "module": "ES2015",
+    "module": "ESNext",
     "alwaysStrict": true,
-    "moduleResolution": "NodeNext",
     "noImplicitThis": true
   },
   "exclude": [
