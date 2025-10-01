@@ -437,7 +437,11 @@ export class SignalVal implements IScopeValue {
       default:
     }
   }
-
+  clone() {
+    let _ = new SignalVal(this.signal);
+    _.value = this.value.clone();
+    return _;
+  }
   //push(expression: IValue) {
   //   if (this.first)
   //    throw "invalid";
@@ -618,7 +622,9 @@ export class Call implements IScopeValue {
   push(expression: Val) {
     this.args.push(expression);
   }
-
+  clone() {
+    return new Call(this.func, this.args.map(a => a.clone()))
+  }
   toString() { return this.toJSON(); }
   toJSON() {
     return this.func + '(' + this.args.join(',') + ')';
