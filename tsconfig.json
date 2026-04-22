@@ -5,6 +5,7 @@
     "declaration": true,
     "module": "ESNext",
     "alwaysStrict": true,
+    "verbatimModuleSyntax": true,
     "noImplicitThis": true
   },
   "exclude": [
